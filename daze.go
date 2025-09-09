@@ -1209,7 +1209,7 @@ func LoadApnic() map[string][]*net.IPNet {
 	log.Println("main: load apnic data from", url)
 	rep := doa.Try(http.Get(url))
 	defer rep.Body.Close()
-	f := io.TeeReader(rep.Body, pretty.NewProgressWriter(rep.ContentLength))
+	f := io.TeeReader(rep.Body, pretty.NewProgressWriter(uint64(rep.ContentLength)))
 	r := map[string][]*net.IPNet{}
 	s := bufio.NewScanner(f)
 	for s.Scan() {

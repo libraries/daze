@@ -89,3 +89,27 @@ func NewLimits(r uint64, p time.Duration) *Limits {
 		step:     p / time.Duration(gcd),
 	}
 }
+
+// LimitsWriter is an io.Writer that applies rate limiting to write operations.
+//
+// For example, to limit a reader's read speed to 1MB/s:
+//
+//	reader := io.TeeReader(os.Stdin, NewLimitsWriter(1024*1024, time.Second))
+//
+// Or, to limit a writer's write speed to 1MB/s:
+//
+//	writer := io.MultiWriter(os.Stdout, NewLimitsWriter(1024*1024, time.Second))
+type LimitsWriter struct {
+	li *Limits
+}
+
+// Write writes data to the underlying writer, applying rate limiting based on the configured limits.
+func (l *LimitsWriter) Write(p []byte) (int, error) {
+	l.li.Wait(uint64(len(p)))
+	return len(p), nil
+}
+
+// NewLimitsWriter creates a new LimitsWriter that limits write operations to r bytes per period p.
+func NewLimitsWriter(limits *Limits) *LimitsWriter {
+	return &LimitsWriter{li: limits}
+}

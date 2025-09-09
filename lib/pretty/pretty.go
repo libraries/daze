@@ -69,14 +69,14 @@ func NewProgress() *Progress {
 // ProgressWriter is an io.Writer that updates a progress bar as data is written.
 type ProgressWriter struct {
 	p *Progress
-	m int64
-	n int64
+	m uint64
+	n uint64
 }
 
 // Write writes data to the ProgressWriter and updates the progress bar.
 func (p *ProgressWriter) Write(b []byte) (int, error) {
 	l := len(b)
-	p.m += int64(l)
+	p.m += uint64(l)
 	p.p.Print(float64(p.m) / float64(p.n))
 	return l, nil
 }
@@ -90,7 +90,7 @@ func (p *ProgressWriter) Write(b []byte) (int, error) {
 // Or to display progress while writing to a writer:
 //
 //	writer := io.MultiWriter(os.Stdout, NewProgressWriter(1024))
-func NewProgressWriter(n int64) *ProgressWriter {
+func NewProgressWriter(n uint64) *ProgressWriter {
 	p := NewProgress()
 	p.Print(0)
 	return &ProgressWriter{
