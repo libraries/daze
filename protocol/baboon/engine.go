@@ -13,9 +13,9 @@ import (
 	"time"
 
 	"github.com/libraries/daze"
+	"github.com/libraries/daze/lib/doa"
+	"github.com/libraries/daze/lib/rate"
 	"github.com/libraries/daze/protocol/ashe"
-	"github.com/libraries/go/doa"
-	"github.com/libraries/go/rate"
 )
 
 // Protocol baboon is the ashe protocol based on http.

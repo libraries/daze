@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/libraries/daze"
-	"github.com/libraries/go/doa"
-	"github.com/libraries/go/rate"
+	"github.com/libraries/daze/lib/doa"
+	"github.com/libraries/daze/lib/rate"
 )
 
 // This document describes a tcp-based cryptographic proxy protocol. The main purpose of this protocol is to bypass

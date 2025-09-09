@@ -15,13 +15,13 @@ import (
 	"time"
 
 	"github.com/libraries/daze"
+	"github.com/libraries/daze/lib/doa"
+	"github.com/libraries/daze/lib/gracefulexit"
+	"github.com/libraries/daze/lib/rate"
 	"github.com/libraries/daze/protocol/ashe"
 	"github.com/libraries/daze/protocol/baboon"
 	"github.com/libraries/daze/protocol/czar"
 	"github.com/libraries/daze/protocol/dahlia"
-	"github.com/libraries/go/doa"
-	"github.com/libraries/go/gracefulexit"
-	"github.com/libraries/go/rate"
 )
 
 // Conf is acting as package level configuration.

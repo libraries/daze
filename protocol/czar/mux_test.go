@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/libraries/daze"
-	"github.com/libraries/go/doa"
+	"github.com/libraries/daze/lib/doa"
 )
 
 func TestProtocolCzarMux(t *testing.T) {

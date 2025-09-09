@@ -5,7 +5,7 @@ import (
 	"math/big"
 	"sync"
 
-	"github.com/libraries/go/doa"
+	"github.com/libraries/daze/lib/doa"
 )
 
 // A stream id generator. Stream id can be reused, and the smallest available stream id is guaranteed to be generated
