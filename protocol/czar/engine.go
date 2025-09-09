@@ -108,9 +108,10 @@ func (s *Server) Run() error {
 				}
 				break
 			}
-			rtc := &daze.RateConn{
-				Conn: cli,
-				Rate: s.Limits,
+			rtc := &daze.ReadWriteCloser{
+				Reader: io.TeeReader(cli, rate.NewLimitsWriter(s.Limits)),
+				Writer: io.MultiWriter(cli, rate.NewLimitsWriter(s.Limits)),
+				Closer: cli,
 			}
 			mux := NewMuxServer(rtc)
 			go func() {

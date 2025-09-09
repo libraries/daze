@@ -234,9 +234,10 @@ func (s *Server) Run() error {
 			idx++
 			ctx := &daze.Context{Cid: idx}
 			log.Printf("conn: %08x accept remote=%s", ctx.Cid, cli.RemoteAddr())
-			rtc := &daze.RateConn{
-				Conn: cli,
-				Rate: s.Limits,
+			rtc := &daze.ReadWriteCloser{
+				Reader: io.TeeReader(cli, rate.NewLimitsWriter(s.Limits)),
+				Writer: io.MultiWriter(cli, rate.NewLimitsWriter(s.Limits)),
+				Closer: cli,
 			}
 			go func() {
 				defer rtc.Close()

@@ -592,9 +592,10 @@ func (l *Locale) Serve(ctx *Context, cli io.ReadWriteCloser) error {
 		buf = make([]byte, 1)
 		err error
 	)
-	cli = &RateConn{
-		Conn: cli,
-		Rate: l.Limits,
+	cli = &ReadWriteCloser{
+		Reader: io.TeeReader(cli, rate.NewLimitsWriter(l.Limits)),
+		Writer: io.MultiWriter(cli, rate.NewLimitsWriter(l.Limits)),
+		Closer: cli,
 	}
 	_, err = io.ReadFull(cli, buf)
 	if err != nil {
@@ -606,7 +607,7 @@ func (l *Locale) Serve(ctx *Context, cli io.ReadWriteCloser) error {
 		}
 		return err
 	}
-	cli = ReadWriteCloser{
+	cli = &ReadWriteCloser{
 		Reader: io.MultiReader(bytes.NewReader(buf), cli),
 		Writer: cli,
 		Closer: cli,
@@ -1138,31 +1139,6 @@ func (r *RandomReader) Read(p []byte) (int, error) {
 		p[i] = byte(rand.Uint64())
 	}
 	return len(p), nil
-}
-
-// RateConn wraps a net.Conn with a per-conn and a rate limiter.
-type RateConn struct {
-	Conn io.ReadWriteCloser
-	Rate *rate.Limits
-}
-
-// Close closes the connection.
-func (r *RateConn) Close() error {
-	return r.Conn.Close()
-}
-
-// Read reads up to len(p) bytes into p.
-func (r *RateConn) Read(p []byte) (int, error) {
-	n, err := r.Conn.Read(p)
-	r.Rate.Wait(uint64(n))
-	return n, err
-}
-
-// Write writes len(p) bytes from p to the underlying data stream.
-func (r *RateConn) Write(p []byte) (int, error) {
-	n, err := r.Conn.Write(p)
-	r.Rate.Wait(uint64(n))
-	return n, err
 }
 
 // Salt converts the stupid password passed in by the user to 32-sized byte array.
