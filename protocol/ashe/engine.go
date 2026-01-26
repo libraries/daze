@@ -12,6 +12,7 @@ import (
 
 	"github.com/libraries/daze"
 	"github.com/libraries/daze/lib/doa"
+	"github.com/libraries/daze/lib/expvpp"
 	"github.com/libraries/daze/lib/rate"
 )
 
@@ -56,9 +57,9 @@ var Conf = struct {
 
 // Expv is a simple wrapper around the expvars package.
 var Expv = struct {
-	ServerClockSkew *daze.ExpvarAverage
+	ServerClockSkew *expvpp.ExpvarAverage
 }{
-	ServerClockSkew: daze.NewExpvarAverage("Protocol.Ashe.Server.ClockSkew", 64),
+	ServerClockSkew: expvpp.NewExpvarAverage("Protocol.Ashe.Server.ClockSkew", 64),
 }
 
 // TCPConn is an implementation of the Conn interface for tcp network connections.

@@ -1,8 +1,6 @@
 package main
 
 import (
-	"encoding/json"
-	"expvar"
 	"flag"
 	"fmt"
 	"log"
@@ -16,6 +14,7 @@ import (
 
 	"github.com/libraries/daze"
 	"github.com/libraries/daze/lib/doa"
+	"github.com/libraries/daze/lib/expvpp"
 	"github.com/libraries/daze/lib/gracefulexit"
 	"github.com/libraries/daze/lib/rate"
 	"github.com/libraries/daze/protocol/ashe"
@@ -63,31 +62,6 @@ func main() {
 	if os.Getenv("ANDROID_ROOT") != "" {
 		net.DefaultResolver = daze.ResolverDns(daze.ResolverPublic.Cloudflare.Dns)
 	}
-	// Remove cmdline and memstats from expvar default exports.
-	// See: https://github.com/golang/go/issues/29105
-	muxHttp := http.NewServeMux()
-	muxHttp.HandleFunc("/debug/vars", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		vars := new(expvar.Map).Init()
-		expvar.Do(func(kv expvar.KeyValue) {
-			vars.Set(kv.Key, kv.Value)
-		})
-		vars.Delete("cmdline")
-		vars.Delete("memstats")
-		msg := map[string]any{}
-		err := json.Unmarshal([]byte(vars.String()), &msg)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte(err.Error()))
-			return
-		}
-		enc := json.NewEncoder(w)
-		enc.SetIndent("", "    ")
-		enc.Encode(msg)
-	})
-	muxHttp.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		http.DefaultServeMux.ServeHTTP(w, r)
-	})
 	resExec := filepath.Dir(doa.Try(os.Executable()))
 	subCommand := os.Args[1]
 	os.Args = os.Args[1:len(os.Args)]
@@ -148,7 +122,7 @@ func main() {
 		if *flGpprof != "" {
 			_ = pprof.Handler
 			log.Println("main: listen net/http/pprof on", *flGpprof)
-			go func() { doa.Nil(http.ListenAndServe(*flGpprof, muxHttp)) }()
+			go func() { doa.Nil(http.ListenAndServe(*flGpprof, expvpp.ServeMux())) }()
 		}
 		// Hang prevent program from exiting.
 		gracefulexit.Wait()
@@ -226,7 +200,7 @@ func main() {
 		if *flGpprof != "" {
 			_ = pprof.Handler
 			log.Println("main: listen net/http/pprof on", *flGpprof)
-			go func() { doa.Nil(http.ListenAndServe(*flGpprof, muxHttp)) }()
+			go func() { doa.Nil(http.ListenAndServe(*flGpprof, expvpp.ServeMux())) }()
 		}
 		// Hang prevent program from exiting.
 		gracefulexit.Wait()
