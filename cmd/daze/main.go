@@ -21,6 +21,7 @@ import (
 	"github.com/libraries/daze/protocol/baboon"
 	"github.com/libraries/daze/protocol/czar"
 	"github.com/libraries/daze/protocol/dahlia"
+	"github.com/libraries/daze/protocol/etch"
 )
 
 // Conf is acting as package level configuration.
@@ -74,7 +75,7 @@ func main() {
 			flGpprof = flag.String("g", "", "specify an address to enable net/http/pprof")
 			flLimits = flag.String("b", "", "set the maximum bandwidth in bytes per second, for example, 128k or 1.5m")
 			flListen = flag.String("l", "0.0.0.0:1081", "listen address")
-			flProtoc = flag.String("p", "ashe", "protocol {ashe, baboon, czar, dahlia}")
+			flProtoc = flag.String("p", "ashe", "protocol {ashe, baboon, czar, dahlia, etch}")
 		)
 		flag.Parse()
 		log.Println("main: server cipher is", *flCipher)
@@ -118,6 +119,13 @@ func main() {
 			}
 			defer server.Close()
 			doa.Nil(server.Run())
+		case "etch":
+			server := etch.NewServer(*flListen, *flCipher)
+			if *flLimits != "" {
+				server.Limits = rate.NewLimits(daze.SizeParser(*flLimits), time.Second)
+			}
+			defer server.Close()
+			doa.Nil(server.Run())
 		}
 		if *flGpprof != "" {
 			_ = pprof.Handler
@@ -136,7 +144,7 @@ func main() {
 			flGpprof = flag.String("g", "", "specify an address to enable net/http/pprof")
 			flLimits = flag.String("b", "", "set the maximum bandwidth in bytes per second, for example, 128k or 1.5m")
 			flListen = flag.String("l", "127.0.0.1:1080", "listen address")
-			flProtoc = flag.String("p", "ashe", "protocol {ashe, baboon, czar, dahlia}")
+			flProtoc = flag.String("p", "ashe", "protocol {ashe, baboon, czar, dahlia, etch}")
 			flRulels = flag.String("r", filepath.Join(resExec, Conf.PathRule), "rule path")
 			flServer = flag.String("s", "127.0.0.1:1081", "server address")
 		)
@@ -196,6 +204,18 @@ func main() {
 			}
 			defer client.Close()
 			doa.Nil(client.Run())
+		case "etch":
+			client := etch.NewClient(*flServer, *flCipher)
+			locale := daze.NewLocale(*flListen, daze.NewAimbot(client, &daze.AimbotOption{
+				Type: *flFilter,
+				Rule: *flRulels,
+				Cidr: *flCidrls,
+			}))
+			if *flLimits != "" {
+				locale.Limits = rate.NewLimits(daze.SizeParser(*flLimits), time.Second)
+			}
+			defer locale.Close()
+			doa.Nil(locale.Run())
 		}
 		if *flGpprof != "" {
 			_ = pprof.Handler
