@@ -84,7 +84,6 @@ var Conf = struct {
 	TickInterval:      time.Millisecond * 10,
 }
 
-// Packet commands.
 const (
 	cmdSyn    uint8 = 0x00
 	cmdSynack uint8 = 0x01
@@ -93,7 +92,6 @@ const (
 	cmdRst    uint8 = 0x04
 )
 
-// Connection states.
 const (
 	stateClosed      int = iota // Initial state. No handshake has happened.
 	stateSynSent                // Client: sent syn, waiting for synack
