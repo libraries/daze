@@ -485,10 +485,7 @@ func (c *Stream) ack(ackNum uint32, win uint32) {
 			if c.cwnd < c.ssthresh {
 				c.cwnd += seg.seql
 			} else {
-				inc := mss * mss / c.cwnd
-				if inc < 1 {
-					inc = 1
-				}
+				inc := max(mss*mss/c.cwnd, 1)
 				c.cwnd += inc
 			}
 			continue
