@@ -86,11 +86,11 @@ var Conf = struct {
 
 // Packet commands.
 const (
-	cmdSYN    uint8 = 0x00
-	cmdSYNACK uint8 = 0x01
-	cmdACK    uint8 = 0x02
-	cmdFIN    uint8 = 0x03
-	cmdRST    uint8 = 0x04
+	cmdSyn    uint8 = 0x00
+	cmdSynack uint8 = 0x01
+	cmdAck    uint8 = 0x02
+	cmdFin    uint8 = 0x03
+	cmdRst    uint8 = 0x04
 )
 
 // Connection states.
@@ -384,7 +384,7 @@ func (c *Stream) flush() {
 		copy(data, c.sndBuf[:n])
 		c.sndBuf = c.sndBuf[n:]
 		seg := &segment{
-			cmd:  cmdACK,
+			cmd:  cmdAck,
 			seq:  c.sndNxt,
 			seql: uint32(n),
 			data: data,
@@ -403,7 +403,7 @@ func (c *Stream) flush() {
 	// Once sndBuf is drained and app has closed, push the fin segment.
 	if c.sndFin && !c.sndFinDone && len(c.sndBuf) == 0 && c.sendable() >= 1 {
 		seg := &segment{
-			cmd:  cmdFIN,
+			cmd:  cmdFin,
 			seq:  c.sndNxt,
 			seql: 1,
 			sent: time.Now(),
@@ -422,7 +422,7 @@ func (c *Stream) flush() {
 	}
 	// Emit a standalone ack if one was scheduled and we did not piggyback any data.
 	if c.sndAckPnd {
-		if err := c.emit(Packet{cmd: cmdACK, seq: c.sndNxt}); err != nil {
+		if err := c.emit(Packet{cmd: cmdAck, seq: c.sndNxt}); err != nil {
 			c.fail(err)
 			return
 		}
@@ -447,7 +447,7 @@ func (c *Stream) retransmit(now time.Time) {
 		c.rto = seg.rto
 		seg.sent = now
 		var pl []byte
-		if seg.cmd == cmdACK {
+		if seg.cmd == cmdAck {
 			pl = seg.data
 		}
 		if err := c.emit(Packet{cmd: seg.cmd, msg: pl, seq: seg.seq}); err != nil {
@@ -483,7 +483,7 @@ func (c *Stream) ack(ackNum uint32, win uint32) {
 			seg.tries++
 			seg.sent = time.Now()
 			var pl []byte
-			if seg.cmd == cmdACK {
+			if seg.cmd == cmdAck {
 				pl = seg.data
 			}
 			if err := c.emit(Packet{cmd: seg.cmd, seq: seg.seq, msg: pl}); err != nil {
@@ -566,16 +566,16 @@ func (c *Stream) deliver(data []byte) {
 func (c *Stream) handle(p Packet) {
 	c.lastRecv = time.Now()
 	switch p.cmd {
-	case cmdRST:
+	case cmdRst:
 		c.fail(errors.New("daze: connection reset by peer"))
 		return
-	case cmdSYN:
+	case cmdSyn:
 		// Spurious or retransmitted syn. Reply with a syn-ack mirroring our state to push the handshake forward.
 		if c.sid == stateSynRcvd {
-			c.emit(Packet{cmd: cmdSYNACK, seq: 0})
+			c.emit(Packet{cmd: cmdSynack, seq: 0})
 		}
 		return
-	case cmdSYNACK:
+	case cmdSynack:
 		switch c.sid {
 		case stateSynSent:
 			c.sndUna = 1
@@ -612,11 +612,11 @@ func (c *Stream) handle(p Packet) {
 	}
 
 	// Payload bookkeeping.
-	if p.cmd == cmdACK && len(p.msg) > 0 {
+	if p.cmd == cmdAck && len(p.msg) > 0 {
 		c.intake(p.seq, p.msg)
 		c.sndAckPnd = true
 	}
-	if p.cmd == cmdFIN {
+	if p.cmd == cmdFin {
 		// Treat fin as a one byte segment at p.seq.
 		c.intakeFin(p.seq)
 		c.sndAckPnd = true
@@ -865,7 +865,7 @@ func (c *Stream) dialHandshake() error {
 	deadline := time.Now().Add(Conf.HandshakeTimeout)
 	for try := range Conf.HandshakeRetries {
 		_ = try
-		if err := c.lnk.Send(PacketEncode(Packet{cmd: cmdSYN, seq: 0, win: uint32(Conf.RecvBufSize)})); err != nil {
+		if err := c.lnk.Send(PacketEncode(Packet{cmd: cmdSyn, seq: 0, win: uint32(Conf.RecvBufSize)})); err != nil {
 			return err
 		}
 		// Read with a timeout managed by the udp socket. dialLink uses a connected udp socket; SetReadDeadline is
@@ -896,7 +896,7 @@ func (c *Stream) dialHandshake() error {
 		if err != nil {
 			continue
 		}
-		if p.cmd != cmdSYNACK {
+		if p.cmd != cmdSynack {
 			continue
 		}
 		// Handshake completed. Ack the synack and enter established.
@@ -907,7 +907,7 @@ func (c *Stream) dialHandshake() error {
 		c.rwnd = p.win
 		c.sid = stateEstablished
 		c.lastRecv = time.Now()
-		c.emit(Packet{cmd: cmdACK, seq: 1})
+		c.emit(Packet{cmd: cmdAck, seq: 1})
 		c.mu.Unlock()
 		return nil
 	}
@@ -1002,7 +1002,7 @@ func (l *Listener) demux() {
 			continue
 		}
 		// Unknown peer. Only react to syn; everything else is silently dropped.
-		if n < 16 || buf[0] != cmdSYN {
+		if n < 16 || buf[0] != cmdSyn {
 			continue
 		}
 		sl = &servLink{
@@ -1021,7 +1021,7 @@ func (l *Listener) demux() {
 		c.sid = stateSynRcvd
 		c.rcvNxt = 1
 		c.lastRecv = time.Now()
-		c.lnk.Send(PacketEncode(Packet{cmd: cmdSYNACK, seq: 0, win: uint32(Conf.RecvBufSize)}))
+		c.lnk.Send(PacketEncode(Packet{cmd: cmdSynack, seq: 0, win: uint32(Conf.RecvBufSize)}))
 		// Forward the original syn so the loop counters stay consistent.
 		c.mu.Unlock()
 		go c.recvLoop()
