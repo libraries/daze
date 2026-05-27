@@ -163,44 +163,50 @@ type ConnCli struct {
 	udp *net.UDPConn
 }
 
-// Write writes a packet to the wire.
-func (l *ConnCli) Write(p []byte) (int, error) { return l.udp.Write(p) }
+// Close closes the underlying socket.
+func (l *ConnCli) Close() error {
+	return l.udp.Close()
+}
 
 // Read reads a packet from the wire.
-func (l *ConnCli) Read(buf []byte) (int, error) { return l.udp.Read(buf) }
+func (l *ConnCli) Read(buf []byte) (int, error) {
+	return l.udp.Read(buf)
+}
 
-// Close closes the underlying socket.
-func (l *ConnCli) Close() error { return l.udp.Close() }
+// Write writes a packet to the wire.
+func (l *ConnCli) Write(p []byte) (int, error) {
+	return l.udp.Write(p)
+}
 
 // ConnSrv is owned by a Listener and routes packets via a channel.
 type ConnSrv struct {
-	udp *net.UDPConn
-	rem *net.UDPAddr
+	err *once.OnceErr
 	inp chan []byte
-	cls *once.OnceErr
 	lst *Listener
+	rem *net.UDPAddr
+	udp *net.UDPConn
 }
 
-// Write writes a packet to the peer.
-func (l *ConnSrv) Write(p []byte) (int, error) { return l.udp.WriteToUDP(p, l.rem) }
+// Close marks the link as closed and asks the listener to forget this peer.
+func (l *ConnSrv) Close() error {
+	l.err.Put(net.ErrClosed)
+	l.lst.detach(l.rem.String())
+	return nil
+}
 
 // Read blocks until the listener delivers a packet or the link is closed.
 func (l *ConnSrv) Read(buf []byte) (int, error) {
 	select {
 	case p := <-l.inp:
 		return copy(buf, p), nil
-	case <-l.cls.Sig():
-		return 0, l.cls.Get()
+	case <-l.err.Sig():
+		return 0, l.err.Get()
 	}
 }
 
-// Close marks the link as closed and asks the listener to forget this peer.
-func (l *ConnSrv) Close() error {
-	l.cls.Put(net.ErrClosed)
-	if l.lst != nil {
-		l.lst.detach(l.rem.String())
-	}
-	return nil
+// Write writes a packet to the peer.
+func (l *ConnSrv) Write(p []byte) (int, error) {
+	return l.udp.WriteToUDP(p, l.rem)
 }
 
 // ============================================================================
@@ -976,11 +982,11 @@ func (l *Listener) demux() {
 			continue
 		}
 		sl = &ConnSrv{
-			udp: l.udp,
-			rem: addr,
+			err: once.NewOnceErr(),
 			inp: make(chan []byte, 64),
-			cls: once.NewOnceErr(),
 			lst: l,
+			rem: addr,
+			udp: l.udp,
 		}
 		l.mu.Lock()
 		l.conns[key] = sl
