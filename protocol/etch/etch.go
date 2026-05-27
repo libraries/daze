@@ -108,11 +108,11 @@ const (
 
 // Packet is the decoded form of a single wire packet.
 type Packet struct {
-	cmd uint8
-	seq uint32
 	ack uint32
-	win uint32
+	cmd uint8
 	msg []byte
+	seq uint32
+	win uint32
 }
 
 // PacketEncode encodes a packet into wire format.
@@ -120,7 +120,6 @@ func PacketEncode(p Packet) []byte {
 	doa.Doa(len(p.msg) <= math.MaxUint16)
 	buf := make([]byte, 0x10+len(p.msg))
 	buf[0] = p.cmd
-	buf[1] = 0
 	binary.BigEndian.PutUint16(buf[0x02:0x04], uint16(len(p.msg)))
 	binary.BigEndian.PutUint32(buf[0x04:0x08], p.seq)
 	binary.BigEndian.PutUint32(buf[0x08:0x0C], p.ack)
@@ -394,7 +393,7 @@ func (c *Stream) flush() {
 		}
 		c.sndNxt += uint32(n)
 		c.inflight = append(c.inflight, seg)
-		if err := c.emit(Packet{cmd: seg.cmd, seq: seg.seq, msg: seg.data}); err != nil {
+		if err := c.emit(Packet{cmd: seg.cmd, msg: seg.data, seq: seg.seq}); err != nil {
 			c.fail(err)
 			return
 		}
@@ -451,7 +450,7 @@ func (c *Stream) retransmit(now time.Time) {
 		if seg.cmd == cmdACK {
 			pl = seg.data
 		}
-		if err := c.emit(Packet{cmd: seg.cmd, seq: seg.seq, msg: pl}); err != nil {
+		if err := c.emit(Packet{cmd: seg.cmd, msg: pl, seq: seg.seq}); err != nil {
 			c.fail(err)
 			return
 		}
@@ -539,10 +538,7 @@ func (c *Stream) observeRTT(r time.Duration) {
 		c.rttvar = (3*c.rttvar + diff) / 4
 		c.srtt = (7*c.srtt + r) / 8
 	}
-	rto := max(c.srtt+4*c.rttvar, Conf.RTOMin)
-	if rto > Conf.RTOMax {
-		rto = Conf.RTOMax
-	}
+	rto := min(max(c.srtt+4*c.rttvar, Conf.RTOMin), Conf.RTOMax)
 	c.rto = rto
 }
 
