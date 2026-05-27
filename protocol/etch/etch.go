@@ -106,11 +106,11 @@ const (
 
 // Packet is the decoded form of a single wire packet.
 type Packet struct {
-	ack uint32
 	cmd uint8
-	msg []byte
 	seq uint32
+	ack uint32
 	win uint32
+	msg []byte
 }
 
 // PacketEncode encodes a packet into wire format.
@@ -158,48 +158,22 @@ func SeqLt(a, b uint32) bool { return int32(a-b) < 0 }
 func SeqGe(a, b uint32) bool { return int32(a-b) >= 0 }
 func SeqLe(a, b uint32) bool { return int32(a-b) <= 0 }
 
-// ============================================================================
-// Link: the abstract transport between two etch endpoints.
-// ============================================================================
-
-// Link is the abstract udp transport beneath a Stream. dialLink owns a connected udp socket while servLink is fed by a
-// Listener that demultiplexes a single udp socket across many connections.
-type link interface {
-	Send([]byte) error
-	Recv() ([]byte, error)
-	Close() error
-	RemoteAddr() net.Addr
-}
-
-// DialLink wraps a dedicated udp socket connected to a single remote.
-type dialLink struct {
+// ConnCli wraps a dedicated udp socket connected to a single remote.
+type ConnCli struct {
 	udp *net.UDPConn
 }
 
-// Send writes a packet to the wire.
-func (l *dialLink) Send(p []byte) error {
-	_, err := l.udp.Write(p)
-	return err
-}
+// Write writes a packet to the wire.
+func (l *ConnCli) Write(p []byte) (int, error) { return l.udp.Write(p) }
 
-// Recv reads a packet from the wire.
-func (l *dialLink) Recv() ([]byte, error) {
-	buf := make([]byte, 65536)
-	n, err := l.udp.Read(buf)
-	if err != nil {
-		return nil, err
-	}
-	return buf[:n], nil
-}
+// Read reads a packet from the wire.
+func (l *ConnCli) Read(buf []byte) (int, error) { return l.udp.Read(buf) }
 
 // Close closes the underlying socket.
-func (l *dialLink) Close() error { return l.udp.Close() }
+func (l *ConnCli) Close() error { return l.udp.Close() }
 
-// RemoteAddr returns the address of the peer.
-func (l *dialLink) RemoteAddr() net.Addr { return l.udp.RemoteAddr() }
-
-// ServLink is owned by a Listener and routes packets via a channel.
-type servLink struct {
+// ConnSrv is owned by a Listener and routes packets via a channel.
+type ConnSrv struct {
 	udp *net.UDPConn
 	rem *net.UDPAddr
 	inp chan []byte
@@ -207,33 +181,27 @@ type servLink struct {
 	lst *Listener
 }
 
-// Send writes a packet to the peer.
-func (l *servLink) Send(p []byte) error {
-	_, err := l.udp.WriteToUDP(p, l.rem)
-	return err
-}
+// Write writes a packet to the peer.
+func (l *ConnSrv) Write(p []byte) (int, error) { return l.udp.WriteToUDP(p, l.rem) }
 
-// Recv blocks until the listener delivers a packet or the link is closed.
-func (l *servLink) Recv() ([]byte, error) {
+// Read blocks until the listener delivers a packet or the link is closed.
+func (l *ConnSrv) Read(buf []byte) (int, error) {
 	select {
 	case p := <-l.inp:
-		return p, nil
+		return copy(buf, p), nil
 	case <-l.cls.Sig():
-		return nil, l.cls.Get()
+		return 0, l.cls.Get()
 	}
 }
 
 // Close marks the link as closed and asks the listener to forget this peer.
-func (l *servLink) Close() error {
+func (l *ConnSrv) Close() error {
 	l.cls.Put(net.ErrClosed)
 	if l.lst != nil {
 		l.lst.detach(l.rem.String())
 	}
 	return nil
 }
-
-// RemoteAddr returns the address of the peer.
-func (l *servLink) RemoteAddr() net.Addr { return l.rem }
 
 // ============================================================================
 // Stream: a reliable, ordered, full-duplex byte stream.
@@ -254,7 +222,8 @@ type segment struct {
 // Stream is a reliable bidirectional byte stream over the udp link. It implements io.ReadWriteCloser. All internal
 // State is guarded by mu, and progress is announced via cnd.
 type Stream struct {
-	lnk link
+	addr net.Addr
+	lnk  io.ReadWriteCloser
 
 	mu  sync.Mutex
 	cnd *sync.Cond
@@ -298,9 +267,10 @@ type Stream struct {
 }
 
 // NewConn allocates a Stream with default state.
-func newConn(l link) *Stream {
+func newConn(lnk io.ReadWriteCloser, addr net.Addr) *Stream {
 	c := &Stream{
-		lnk:      l,
+		addr:     addr,
+		lnk:      lnk,
 		sid:      stateClosed,
 		rer:      once.NewOnceErr(),
 		wer:      once.NewOnceErr(),
@@ -345,7 +315,8 @@ func (c *Stream) sendable() uint32 {
 func (c *Stream) emit(p Packet) error {
 	p.ack = c.rcvNxt
 	p.win = c.rcvWnd()
-	return c.lnk.Send(PacketEncode(p))
+	_, err := c.lnk.Write(PacketEncode(p))
+	return err
 }
 
 // Fail marks the connection as dead and wakes everyone up.
@@ -685,15 +656,16 @@ func (c *Stream) intakeFin(seq uint32) {
 
 // RecvLoop reads packets from the link until it fails.
 func (c *Stream) recvLoop() {
+	buf := make([]byte, 65536)
 	for {
-		buf, err := c.lnk.Recv()
+		n, err := c.lnk.Read(buf)
 		if err != nil {
 			c.mu.Lock()
 			c.fail(err)
 			c.mu.Unlock()
 			return
 		}
-		p, err := PacketDecode(buf)
+		p, err := PacketDecode(buf[:n])
 		if err != nil {
 			continue
 		}
@@ -847,7 +819,7 @@ func (c *Stream) shutdown() {
 }
 
 // RemoteAddr returns the network address of the peer.
-func (c *Stream) RemoteAddr() net.Addr { return c.lnk.RemoteAddr() }
+func (c *Stream) RemoteAddr() net.Addr { return c.addr }
 
 // ============================================================================
 // Handshake (client side)
@@ -863,12 +835,12 @@ func (c *Stream) dialHandshake() error {
 	deadline := time.Now().Add(Conf.HandshakeTimeout)
 	for try := range Conf.HandshakeRetries {
 		_ = try
-		if err := c.lnk.Send(PacketEncode(Packet{cmd: cmdSyn, seq: 0, win: uint32(Conf.RecvBufSize)})); err != nil {
+		if _, err := c.lnk.Write(PacketEncode(Packet{cmd: cmdSyn, seq: 0, win: uint32(Conf.RecvBufSize)})); err != nil {
 			return err
 		}
 		// Read with a timeout managed by the udp socket. dialLink uses a connected udp socket; SetReadDeadline is
 		// Needed. We poke into the concrete type to set the deadline.
-		dl, ok := c.lnk.(*dialLink)
+		dl, ok := c.lnk.(*ConnCli)
 		if !ok {
 			return errors.New("daze: invalid dial link")
 		}
@@ -926,7 +898,7 @@ func Dial(address string) (*Stream, error) {
 	if err != nil {
 		return nil, err
 	}
-	c := newConn(&dialLink{udp: udp})
+	c := newConn(&ConnCli{udp: udp}, udp.RemoteAddr())
 	if err := c.dialHandshake(); err != nil {
 		udp.Close()
 		return nil, err
@@ -944,7 +916,7 @@ func Dial(address string) (*Stream, error) {
 type Listener struct {
 	udp    *net.UDPConn
 	mu     sync.Mutex
-	conns  map[string]*servLink
+	conns  map[string]*ConnSrv
 	accept chan *Stream
 	closed *once.OnceErr
 }
@@ -961,7 +933,7 @@ func Listen(address string) (*Listener, error) {
 	}
 	l := &Listener{
 		udp:    udp,
-		conns:  make(map[string]*servLink),
+		conns:  make(map[string]*ConnSrv),
 		accept: make(chan *Stream, 32),
 		closed: once.NewOnceErr(),
 	}
@@ -1003,7 +975,7 @@ func (l *Listener) demux() {
 		if n < 16 || buf[0] != cmdSyn {
 			continue
 		}
-		sl = &servLink{
+		sl = &ConnSrv{
 			udp: l.udp,
 			rem: addr,
 			inp: make(chan []byte, 64),
@@ -1013,13 +985,13 @@ func (l *Listener) demux() {
 		l.mu.Lock()
 		l.conns[key] = sl
 		l.mu.Unlock()
-		c := newConn(sl)
+		c := newConn(sl, addr)
 		// Seed the handshake: peer just sent us a syn, mirror back a syn-ack.
 		c.mu.Lock()
 		c.sid = stateSynRcvd
 		c.rcvNxt = 1
 		c.lastRecv = time.Now()
-		c.lnk.Send(PacketEncode(Packet{cmd: cmdSynack, seq: 0, win: uint32(Conf.RecvBufSize)}))
+		c.lnk.Write(PacketEncode(Packet{cmd: cmdSynack, seq: 0, win: uint32(Conf.RecvBufSize)}))
 		// Forward the original syn so the loop counters stay consistent.
 		c.mu.Unlock()
 		go c.recvLoop()
