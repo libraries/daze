@@ -79,6 +79,7 @@ func TestProtocolEtchUDP(t *testing.T) {
 	dazeServer.Run()
 
 	dazeClient := NewClient(DazeServerListenOn, Password)
+	defer dazeClient.Close()
 	ctx := &daze.Context{}
 	cli := doa.Try(dazeClient.Dial(ctx, "udp", DazeTesterListenOn))
 	defer cli.Close()
