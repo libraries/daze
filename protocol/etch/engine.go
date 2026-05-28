@@ -140,8 +140,8 @@ func (s *Server) Run() error {
 					if err != nil {
 						return
 					}
-					idx++
-					ctx := &daze.Context{Cid: idx}
+					cid := atomic.AddUint32(&idx, 1)
+					ctx := &daze.Context{Cid: cid}
 					cli := &Stream{rem: rem, stm: stm}
 					log.Printf("conn: %08x accept remote=%s", ctx.Cid, rem)
 					rtc := &daze.ReadWriteCloser{
