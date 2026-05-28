@@ -288,8 +288,8 @@ type Stream struct {
 	once     sync.Once
 }
 
-// NewConn allocates a Stream with default state.
-func newConn(lnk io.ReadWriteCloser, addr net.Addr) *Stream {
+// NewStream allocates a Stream with default state.
+func NewStream(lnk io.ReadWriteCloser, addr net.Addr) *Stream {
 	c := &Stream{
 		addr:     addr,
 		lnk:      lnk,
@@ -899,7 +899,7 @@ func Dial(address string) (*Stream, error) {
 	if err != nil {
 		return nil, err
 	}
-	c := newConn(&ConnCli{udp: udp}, udp.RemoteAddr())
+	c := NewStream(&ConnCli{udp: udp}, udp.RemoteAddr())
 	if err := c.dialHandshake(); err != nil {
 		udp.Close()
 		return nil, err
@@ -986,7 +986,7 @@ func (l *Listener) demux() {
 		l.mu.Lock()
 		l.conns[key] = sl
 		l.mu.Unlock()
-		c := newConn(sl, addr)
+		c := NewStream(sl, addr)
 		// Seed the handshake: peer just sent us a syn, mirror back a syn-ack.
 		c.mu.Lock()
 		c.sid = stateSynRcvd
