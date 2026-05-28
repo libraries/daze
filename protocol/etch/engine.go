@@ -13,7 +13,6 @@ import (
 	"math"
 	"math/big"
 	"net"
-	"sync"
 	"time"
 
 	"github.com/libraries/daze"
@@ -107,7 +106,7 @@ func (s *Stream) Write(p []byte) (int, error) {
 // Server implemented the ashe-over-quic protocol.
 type Server struct {
 	Cipher []byte
-	Ep     *quic.Endpoint
+	EpQuic *quic.Endpoint
 	Limits *rate.Limits
 	Listen string
 }
@@ -120,25 +119,25 @@ func (s *Server) Serve(ctx *daze.Context, cli io.ReadWriteCloser) error {
 
 // Close listener. Established connections will not be closed.
 func (s *Server) Close() error {
-	if s.Ep != nil {
-		return s.Ep.Close(context.Background())
+	if s.EpQuic != nil {
+		return s.EpQuic.Close(context.Background())
 	}
 	return nil
 }
 
 // Run it.
 func (s *Server) Run() error {
-	ep, err := quic.Listen("udp", s.Listen, ServerConfig.Do())
+	l, err := quic.Listen("udp", s.Listen, ServerConfig.Do())
 	if err != nil {
 		return err
 	}
-	s.Ep = ep
+	s.EpQuic = l
 	log.Println("main: listen and serve on", s.Listen)
 
 	go func() {
 		idx := uint32(math.MaxUint32)
 		for {
-			con, err := ep.Accept(context.Background())
+			con, err := l.Accept(context.Background())
 			if err != nil {
 				if !errors.Is(err, context.Canceled) && !errors.Is(err, net.ErrClosed) {
 					log.Println("main:", err)
@@ -147,7 +146,7 @@ func (s *Server) Run() error {
 			}
 			go func(con *quic.Conn) {
 				defer con.Close()
-				peer := net.UDPAddrFromAddrPort(con.RemoteAddr())
+				rem := net.UDPAddrFromAddrPort(con.RemoteAddr())
 				for {
 					stm, err := con.AcceptStream(context.Background())
 					if err != nil {
@@ -155,8 +154,8 @@ func (s *Server) Run() error {
 					}
 					idx++
 					ctx := &daze.Context{Cid: idx}
-					cli := &Stream{rem: peer, stm: stm}
-					log.Printf("conn: %08x accept remote=%s", ctx.Cid, peer)
+					cli := &Stream{rem: rem, stm: stm}
+					log.Printf("conn: %08x accept remote=%s", ctx.Cid, rem)
 					rtc := &daze.ReadWriteCloser{
 						Reader: io.TeeReader(cli, rate.NewLimitsWriter(s.Limits)),
 						Writer: io.MultiWriter(cli, rate.NewLimitsWriter(s.Limits)),
@@ -189,56 +188,27 @@ func NewServer(listen string, cipher string) *Server {
 // Client implemented the ashe-over-quic protocol.
 type Client struct {
 	Cipher []byte
+	EpQuic *quic.Endpoint
 	Server string
-
-	mu sync.Mutex
-	ep *quic.Endpoint
 }
 
-// endpoint lazily creates the shared quic endpoint that originates outbound connections. A single endpoint can
-// originate many connections, so reusing it avoids burning a new udp socket for every Dial.
-func (c *Client) endpoint() (*quic.Endpoint, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.ep != nil {
-		return c.ep, nil
-	}
-	// The client endpoint also needs a tls config that satisfies the "certificate or GetCertificate" requirement of
-	// quic.Listen even though the endpoint never accepts inbound connections.
-	ep, err := quic.Listen("udp", ":0", ClientConfig.Do())
+// Dial connects to the address on the named network.
+func (c *Client) Dial(ctx *daze.Context, network string, address string) (io.ReadWriteCloser, error) {
+	con, err := c.EpQuic.Dial(context.Background(), "udp", c.Server, ClientConfig.Do())
 	if err != nil {
 		return nil, err
 	}
-	c.ep = ep
-	return ep, nil
-}
-
-// Estab dials the etch server and establishes an ashe channel over it. It is the caller's responsibility to close the
-// returned conn.
-func (c *Client) Estab(ctx *daze.Context, network string, address string) (io.ReadWriteCloser, error) {
-	ep, err := c.endpoint()
-	if err != nil {
-		return nil, err
-	}
-	dialCtx, cancel := context.WithTimeout(context.Background(), daze.Conf.DialerTimeout)
-	defer cancel()
-	con, err := ep.Dial(dialCtx, "udp", c.Server, ClientConfig.Do())
-	if err != nil {
-		return nil, err
-	}
-	stm, err := con.NewStream(dialCtx)
+	stm, err := con.NewStream(context.Background())
 	if err != nil {
 		con.Close()
 		return nil, err
 	}
-	// NewStream is lazy: the peer does not see the stream until the first byte is written. Force a flush so the
-	// server's AcceptStream returns promptly even if the ashe client decides to read before writing.
 	if err := stm.Flush(); err != nil {
 		con.Close()
 		return nil, err
 	}
-	addr := net.UDPAddrFromAddrPort(con.RemoteAddr())
-	srv := &Stream{con: con, rem: addr, stm: stm}
+	rem := net.UDPAddrFromAddrPort(con.RemoteAddr())
+	srv := &Stream{con: con, rem: rem, stm: stm}
 	spy := &ashe.Client{Cipher: c.Cipher}
 	out, err := spy.Estab(ctx, srv, network, address)
 	if err != nil {
@@ -248,15 +218,11 @@ func (c *Client) Estab(ctx *daze.Context, network string, address string) (io.Re
 	return out, nil
 }
 
-// Dial connects to the address on the named network.
-func (c *Client) Dial(ctx *daze.Context, network string, address string) (io.ReadWriteCloser, error) {
-	return c.Estab(ctx, network, address)
-}
-
 // NewClient returns a new Client. Cipher is a password in string form, with no length limit.
 func NewClient(server string, cipher string) *Client {
 	return &Client{
 		Cipher: daze.Salt(cipher),
+		EpQuic: doa.Try(quic.Listen("udp", ":0", ClientConfig.Do())),
 		Server: server,
 	}
 }
