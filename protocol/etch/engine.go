@@ -28,7 +28,7 @@ var (
 		key := doa.Try(ecdsa.GenerateKey(elliptic.P256(), rand.Reader))
 		tpl := &x509.Certificate{
 			SerialNumber: big.NewInt(1),
-			NotBefore:    time.Now().Add(-time.Hour),
+			NotBefore:    time.Now().Truncate(time.Hour),
 			NotAfter:     time.Now().Add(time.Hour * 24 * 365 * 10),
 		}
 		der := doa.Try(x509.CreateCertificate(rand.Reader, tpl, tpl, &key.PublicKey, key))
@@ -38,12 +38,6 @@ var (
 				MinVersion:   tls.VersionTLS13,
 				NextProtos:   []string{"ashe"},
 			},
-			MaxBidiRemoteStreams:     math.MaxInt32,
-			MaxStreamReadBufferSize:  4 * 1024 * 1024,
-			MaxStreamWriteBufferSize: 4 * 1024 * 1024,
-			MaxConnReadBufferSize:    4 * 1024 * 1024,
-			MaxIdleTimeout:           -1,
-			KeepAlivePeriod:          time.Second * 30,
 		}
 	})
 	ClientConfig = once.NewOnceNew(func() *quic.Config {
@@ -53,12 +47,6 @@ var (
 				MinVersion:         tls.VersionTLS13,
 				NextProtos:         []string{"ashe"},
 			},
-			MaxBidiRemoteStreams:     math.MaxInt32,
-			MaxStreamReadBufferSize:  4 * 1024 * 1024,
-			MaxStreamWriteBufferSize: 4 * 1024 * 1024,
-			MaxConnReadBufferSize:    4 * 1024 * 1024,
-			MaxIdleTimeout:           -1,
-			KeepAlivePeriod:          time.Second * 30,
 		}
 	})
 )
