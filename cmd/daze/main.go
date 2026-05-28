@@ -206,6 +206,7 @@ func main() {
 			doa.Nil(client.Run())
 		case "etch":
 			client := etch.NewClient(*flServer, *flCipher)
+			defer client.Close()
 			locale := daze.NewLocale(*flListen, daze.NewAimbot(client, &daze.AimbotOption{
 				Type: *flFilter,
 				Rule: *flRulels,
