@@ -211,10 +211,6 @@ func (l *ConnSrv) Write(p []byte) (int, error) {
 	return l.udp.WriteToUDP(p, l.rem)
 }
 
-// ============================================================================
-// Stream: a reliable, ordered, full-duplex byte stream.
-// ============================================================================
-
 // Segment is a unit of data tracked by the sliding window. Each segment carries either DATA or FIN, and consumes seql
 // Bytes of sequence space (len(data) for DATA, 1 for FIN).
 type segment struct {
