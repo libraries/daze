@@ -223,6 +223,26 @@ type Pdu struct {
 	seql uint32
 }
 
+// Rtt is an rfc6298 rtt estimator. Zero value is valid: the first sample initialises all fields.
+type Rtt struct {
+	srtt   time.Duration
+	rttvar time.Duration
+	rto    time.Duration
+}
+
+// Update folds a new rtt sample into the estimator.
+func (r *Rtt) Update(sample time.Duration) {
+	switch {
+	case r.srtt == 0:
+		r.srtt = sample
+		r.rttvar = sample / 2
+	case r.srtt != 0:
+		r.rttvar = (3*r.rttvar + (r.srtt - sample).Abs()) / 4
+		r.srtt = (7*r.srtt + sample) / 8
+	}
+	r.rto = min(max(r.srtt+4*r.rttvar, Conf.RTOMin), Conf.RTOMax)
+}
+
 // Stream is a reliable bidirectional byte stream over the udp link. It implements io.ReadWriteCloser. All internal
 // State is guarded by mu, and progress is announced via cnd.
 type Stream struct {
@@ -252,9 +272,7 @@ type Stream struct {
 	dupAckSeq   uint32
 
 	// RTT estimator following rfc6298.
-	srtt   time.Duration
-	rttvar time.Duration
-	rto    time.Duration
+	rtt Rtt
 
 	// Recv side.
 	rcvBuf    []byte            // Contiguous bytes ready to be delivered to Read
@@ -283,7 +301,7 @@ func newConn(lnk io.ReadWriteCloser, addr net.Addr) *Stream {
 		rwnd:     uint32(Conf.MaxSegmentSize),
 		cwnd:     uint32(Conf.MaxSegmentSize),
 		ssthresh: math.MaxUint32,
-		rto:      Conf.RTONew,
+		rtt:      Rtt{rto: Conf.RTONew},
 		lastRecv: time.Now(),
 		cancel:   make(chan struct{}),
 	}
@@ -362,7 +380,7 @@ func (c *Stream) flush() {
 			seql: uint32(n),
 			data: data,
 			sent: time.Now(),
-			rto:  c.rto,
+			rto:  c.rtt.rto,
 		}
 		c.sndNxt += uint32(n)
 		c.inflight = append(c.inflight, seg)
@@ -380,7 +398,7 @@ func (c *Stream) flush() {
 			seq:  c.sndNxt,
 			seql: 1,
 			sent: time.Now(),
-			rto:  c.rto,
+			rto:  c.rtt.rto,
 		}
 		c.sndFinSeq = c.sndNxt
 		c.sndFinDone = true
@@ -417,7 +435,7 @@ func (c *Stream) retransmit(now time.Time) {
 		if seg.rto > Conf.RTOMax {
 			seg.rto = Conf.RTOMax
 		}
-		c.rto = seg.rto
+		c.rtt.rto = seg.rto
 		seg.sent = now
 		var pl []byte
 		if seg.cmd == cmdAck {
@@ -476,7 +494,7 @@ func (c *Stream) ack(ackNum uint32, win uint32) {
 		if SeqLe(segEnd, ackNum) {
 			// Fully acked. Take an rtt sample only when this segment was not retransmitted.
 			if seg.reno == 0 {
-				c.observeRTT(now.Sub(seg.sent))
+				c.rtt.Update(now.Sub(seg.sent))
 			}
 			// Slow start vs congestion avoidance.
 			mss := uint32(Conf.MaxSegmentSize)
@@ -493,19 +511,6 @@ func (c *Stream) ack(ackNum uint32, win uint32) {
 	c.inflight = keep
 	c.sndUna = ackNum
 	c.cnd.Broadcast()
-}
-
-// ObserveRTT folds a new rtt sample into the estimator. Must be called with mu held.
-func (c *Stream) observeRTT(sample time.Duration) {
-	switch {
-	case c.srtt == 0:
-		c.srtt = sample
-		c.rttvar = sample / 2
-	case c.srtt != 0:
-		c.rttvar = (3*c.rttvar + (c.srtt - sample).Abs()) / 4
-		c.srtt = (7*c.srtt + sample) / 8
-	}
-	c.rto = min(max(c.srtt+4*c.rttvar, Conf.RTOMin), Conf.RTOMax)
 }
 
 // ============================================================================
