@@ -13,6 +13,7 @@ import (
 	"math"
 	"math/big"
 	"net"
+	"sync/atomic"
 	"time"
 
 	"github.com/libraries/daze"
