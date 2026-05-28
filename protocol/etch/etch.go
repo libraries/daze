@@ -51,6 +51,13 @@ import (
 
 // Conf is acting as package level configuration.
 var Conf = struct {
+	// Upper clamp for the retransmission timeout.
+	RTOMax time.Duration
+	// Lower clamp for the retransmission timeout.
+	RTOMin time.Duration
+	// The initial retransmission timeout, used until the first rtt sample.
+	RTONew time.Duration
+
 	// The number of times the handshake may be retransmitted before the dial gives up.
 	HandshakeRetries int
 	// The total time budget for completing a handshake.
@@ -61,25 +68,20 @@ var Conf = struct {
 	MaxSegmentSize int
 	// The capacity of the receive buffer. This is the maximum window the connection will advertise.
 	RecvBufSize int
-	// The initial retransmission timeout, used until the first rtt sample.
-	RTOInitial time.Duration
-	// Lower clamp for the retransmission timeout.
-	RTOMin time.Duration
-	// Upper clamp for the retransmission timeout.
-	RTOMax time.Duration
 	// The capacity of the send buffer. Write will block when the buffer is full.
 	SendBufSize int
 	// The interval at which the engine wakes up to scan for retransmission timeouts.
 	TickInterval time.Duration
 }{
+	RTOMax: time.Second * 120,
+	RTOMin: time.Second / 5,
+	RTONew: time.Second * 1,
+
 	HandshakeRetries:  6,
 	HandshakeTimeout:  time.Second * 8,
 	IdleResetInterval: time.Second * 64,
 	MaxSegmentSize:    1200,
 	RecvBufSize:       256 * 1024,
-	RTOInitial:        time.Millisecond * 200,
-	RTOMin:            time.Millisecond * 20,
-	RTOMax:            time.Second * 16,
 	SendBufSize:       256 * 1024,
 	TickInterval:      time.Millisecond * 10,
 }
@@ -285,7 +287,7 @@ func newConn(lnk io.ReadWriteCloser, addr net.Addr) *Stream {
 		rwnd:     uint32(Conf.MaxSegmentSize),
 		cwnd:     uint32(Conf.MaxSegmentSize),
 		ssthresh: math.MaxUint32,
-		rto:      Conf.RTOInitial,
+		rto:      Conf.RTONew,
 		lastRecv: time.Now(),
 		cancel:   make(chan struct{}),
 	}
@@ -498,20 +500,16 @@ func (c *Stream) ack(ackNum uint32, win uint32) {
 }
 
 // ObserveRTT folds a new rtt sample into the estimator. Must be called with mu held.
-func (c *Stream) observeRTT(r time.Duration) {
-	if c.srtt == 0 {
-		c.srtt = r
-		c.rttvar = r / 2
-	} else {
-		diff := c.srtt - r
-		if diff < 0 {
-			diff = -diff
-		}
-		c.rttvar = (3*c.rttvar + diff) / 4
-		c.srtt = (7*c.srtt + r) / 8
+func (c *Stream) observeRTT(sample time.Duration) {
+	switch {
+	case c.srtt == 0:
+		c.srtt = sample
+		c.rttvar = sample / 2
+	case c.srtt != 0:
+		c.rttvar = (3*c.rttvar + (c.srtt - sample).Abs()) / 4
+		c.srtt = (7*c.srtt + sample) / 8
 	}
-	rto := min(max(c.srtt+4*c.rttvar, Conf.RTOMin), Conf.RTOMax)
-	c.rto = rto
+	c.rto = min(max(c.srtt+4*c.rttvar, Conf.RTOMin), Conf.RTOMax)
 }
 
 // ============================================================================
@@ -834,7 +832,7 @@ func (c *Stream) dialHandshake() error {
 	c.sid = stateSynSent
 	c.mu.Unlock()
 	// Send syn synchronously and wait for syn-ack with exponential backoff.
-	rto := Conf.RTOInitial
+	rto := Conf.RTONew
 	deadline := time.Now().Add(Conf.HandshakeTimeout)
 	for try := range Conf.HandshakeRetries {
 		_ = try
