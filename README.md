@@ -72,7 +72,7 @@ This [article](https://www.cloudflare.com/learning/dns/dns-over-tls/) briefly de
 
 ## Configuration: Protocols
 
-Daze currently has 4 protocols.
+Daze currently has 5 protocols.
 
 **Ashe**
 
@@ -109,6 +109,16 @@ $ daze client -l :20002 -s 127.0.0.1:20001 -p dahlia
 ```
 
 Reminder again: Dahlia is not a proxy protocol but a port forwarding protocol.
+
+
+**Etch**
+
+Protocol etch is the ashe protocol carried over QUIC. QUIC is a UDP-based, multiplexed, encrypted transport, so etch enjoys two practical advantages over plain ashe: a single UDP flow is much harder for middleboxes to throttle than a long-lived TCP connection, and the connection survives transient packet loss and network address changes that would tear down TCP. Because the ashe layer already encrypts the traffic with a pre-shared key, the TLS 1.3 handshake required by QUIC uses a self-signed certificate generated on the fly and the client skips verification; trust is entirely established by the ashe password.
+
+```sh
+$ daze server ... -p etch
+$ daze client ... -p etch
+```
 
 ## Configuration: Proxy Control
 
