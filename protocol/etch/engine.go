@@ -181,6 +181,14 @@ type Client struct {
 	Server string
 }
 
+// Close releases the underlying QUIC endpoint.
+func (c *Client) Close() error {
+	if c.EpQuic != nil {
+		return c.EpQuic.Close(context.Background())
+	}
+	return nil
+}
+
 // Dial connects to the address on the named network.
 func (c *Client) Dial(ctx *daze.Context, network string, address string) (io.ReadWriteCloser, error) {
 	cty, end := context.WithTimeout(context.Background(), daze.Conf.DialerTimeout)
