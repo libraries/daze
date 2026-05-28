@@ -59,7 +59,7 @@ var Conf = struct {
 	RTONew time.Duration
 
 	// The number of times the handshake may be retransmitted before the dial gives up.
-	HandshakeRetries int
+	HandshakeRereno int
 	// The total time budget for completing a handshake.
 	HandshakeTimeout time.Duration
 	// If no data is read from the peer for more than this time, the connection is closed.
@@ -77,7 +77,7 @@ var Conf = struct {
 	RTOMin: time.Second / 5,
 	RTONew: time.Second * 1,
 
-	HandshakeRetries:  6,
+	HandshakeRereno:   6,
 	HandshakeTimeout:  time.Second * 8,
 	IdleResetInterval: time.Second * 64,
 	MaxSegmentSize:    1200,
@@ -211,16 +211,16 @@ func (l *ConnSrv) Write(p []byte) (int, error) {
 	return l.udp.WriteToUDP(p, l.rem)
 }
 
-// Segment is a unit of data tracked by the sliding window. Each segment carries either DATA or FIN, and consumes seql
-// Bytes of sequence space (len(data) for DATA, 1 for FIN).
-type segment struct {
-	cmd   uint8
-	seq   uint32
-	seql  uint32
-	data  []byte
-	sent  time.Time
-	rto   time.Duration
-	tries int
+// Protocol data unit is a unit of data tracked by the sliding window. Each segment carries either DATA or FIN, and
+// consumes seql bytes of sequence space (len(data) for DATA, 1 for FIN).
+type Pdu struct {
+	cmd  uint8
+	data []byte
+	reno int
+	rto  time.Duration
+	sent time.Time
+	seq  uint32
+	seql uint32
 }
 
 // Stream is a reliable bidirectional byte stream over the udp link. It implements io.ReadWriteCloser. All internal
@@ -236,17 +236,17 @@ type Stream struct {
 	wer *once.OnceErr // Write side sticky error
 
 	// Send side.
-	sndBuf      []byte     // Bytes accepted by Write but not yet placed into a segment
-	sndUna      uint32     // Oldest unacked sequence number
-	sndNxt      uint32     // Next sequence number to assign
-	sndFin      bool       // App has called Close, fin must be sent after sndBuf drains
-	sndFinSeq   uint32     // Sequence number assigned to the fin segment
-	sndFinDone  bool       // Fin segment has been pushed into the inflight queue
-	sndFinAcked bool       // Fin segment has been cumulatively acknowledged
-	sndAckPnd   bool       // A pure ack is pending and must be sent
-	inflight    []*segment // Sent but not yet acked, sorted by seq
-	rwnd        uint32     // Last window advertised by peer
-	cwnd        uint32     // Congestion window
+	sndBuf      []byte // Bytes accepted by Write but not yet placed into a segment
+	sndUna      uint32 // Oldest unacked sequence number
+	sndNxt      uint32 // Next sequence number to assign
+	sndFin      bool   // App has called Close, fin must be sent after sndBuf drains
+	sndFinSeq   uint32 // Sequence number assigned to the fin segment
+	sndFinDone  bool   // Fin segment has been pushed into the inflight queue
+	sndFinAcked bool   // Fin segment has been cumulatively acknowledged
+	sndAckPnd   bool   // A pure ack is pending and must be sent
+	inflight    []*Pdu // Sent but not yet acked, sorted by seq
+	rwnd        uint32 // Last window advertised by peer
+	cwnd        uint32 // Congestion window
 	ssthresh    uint32
 	dupAck      int
 	dupAckSeq   uint32
@@ -356,7 +356,7 @@ func (c *Stream) flush() {
 		data := make([]byte, n)
 		copy(data, c.sndBuf[:n])
 		c.sndBuf = c.sndBuf[n:]
-		seg := &segment{
+		seg := &Pdu{
 			cmd:  cmdAck,
 			seq:  c.sndNxt,
 			seql: uint32(n),
@@ -375,7 +375,7 @@ func (c *Stream) flush() {
 	}
 	// Once sndBuf is drained and app has closed, push the fin segment.
 	if c.sndFin && !c.sndFinDone && len(c.sndBuf) == 0 && c.sendable() >= 1 {
-		seg := &segment{
+		seg := &Pdu{
 			cmd:  cmdFin,
 			seq:  c.sndNxt,
 			seql: 1,
@@ -412,7 +412,7 @@ func (c *Stream) retransmit(now time.Time) {
 		// Loss event: collapse cwnd, double rto (karn's algorithm rules out an rtt sample on this segment).
 		c.ssthresh = max(c.inflightBytes()/2, uint32(Conf.MaxSegmentSize)*2)
 		c.cwnd = uint32(Conf.MaxSegmentSize)
-		seg.tries++
+		seg.reno++
 		seg.rto *= 2
 		if seg.rto > Conf.RTOMax {
 			seg.rto = Conf.RTOMax
@@ -453,7 +453,7 @@ func (c *Stream) ack(ackNum uint32, win uint32) {
 			c.ssthresh = max(c.inflightBytes()/2, uint32(Conf.MaxSegmentSize)*2)
 			c.cwnd = c.ssthresh
 			seg := c.inflight[0]
-			seg.tries++
+			seg.reno++
 			seg.sent = time.Now()
 			var pl []byte
 			if seg.cmd == cmdAck {
@@ -475,7 +475,7 @@ func (c *Stream) ack(ackNum uint32, win uint32) {
 		segEnd := seg.seq + seg.seql
 		if SeqLe(segEnd, ackNum) {
 			// Fully acked. Take an rtt sample only when this segment was not retransmitted.
-			if seg.tries == 0 {
+			if seg.reno == 0 {
 				c.observeRTT(now.Sub(seg.sent))
 			}
 			// Slow start vs congestion avoidance.
@@ -512,7 +512,7 @@ func (c *Stream) observeRTT(sample time.Duration) {
 // Recv path
 // ============================================================================
 
-// Deliver appends an in-order data slice to the recv buffer and tries to drain rcvOoo. Must be called with mu held.
+// Deliver appends an in-order data slice to the recv buffer and reno to drain rcvOoo. Must be called with mu held.
 func (c *Stream) deliver(data []byte) {
 	c.rcvBuf = append(c.rcvBuf, data...)
 	c.rcvNxt += uint32(len(data))
@@ -830,7 +830,7 @@ func (c *Stream) dialHandshake() error {
 	// Send syn synchronously and wait for syn-ack with exponential backoff.
 	rto := Conf.RTONew
 	deadline := time.Now().Add(Conf.HandshakeTimeout)
-	for try := range Conf.HandshakeRetries {
+	for try := range Conf.HandshakeRereno {
 		_ = try
 		if _, err := c.lnk.Write(PacketEncode(Packet{cmd: cmdSyn, seq: 0, win: uint32(Conf.RecvBufSize)})); err != nil {
 			return err
