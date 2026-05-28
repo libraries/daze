@@ -15,8 +15,8 @@ import (
 )
 
 // Protocol etch is a reliable, ordered, stream-oriented protocol implemented on top of udp. We call it rudp. It is
-// Shaped after tcp: data is sent as a stream of bytes, segments may arrive out of order or be lost, and the protocol
-// Is responsible for reassembly, retransmission, flow control and congestion control.
+// shaped after tcp: data is sent as a stream of bytes, segments may arrive out of order or be lost, and the protocol
+// is responsible for reassembly, retransmission, flow control and congestion control.
 //
 // The packet format is fixed 16-byte header followed by an optional payload:
 //
@@ -44,10 +44,10 @@ import (
 // - Msg : Data, may be empty. Only carries when cmd is ACK; SYN and FIN do not carry payload.
 //
 // Reliability is provided by sequence numbers, cumulative acknowledgements, a sliding window of inflight segments,
-// Timeout based retransmission with an rfc6298 style rto estimator, and a fast retransmit triggered by three
-// Duplicate acknowledgements. Congestion control follows the classic tcp-tahoe scheme of slow start and congestion
-// Avoidance with aimd on loss. Both the congestion window and the peer advertised window are measured in bytes; the
-// Sender is allowed to inject up to min(cwnd, rwnd) bytes into the network at any time.
+// timeout based retransmission with an rfc6298 style rto estimator, and a fast retransmit triggered by three
+// duplicate acknowledgements. Congestion control follows the classic tcp-tahoe scheme of slow start and congestion
+// avoidance with aimd on loss. Both the congestion window and the peer advertised window are measured in bytes; the
+// sender is allowed to inject up to min(cwnd, rwnd) bytes into the network at any time.
 
 // Conf is acting as package level configuration.
 var Conf = struct {
@@ -244,7 +244,7 @@ func (r *Rtt) Update(sample time.Duration) {
 }
 
 // Stream is a reliable bidirectional byte stream over the udp link. It implements io.ReadWriteCloser. All internal
-// State is guarded by mu, and progress is announced via cnd.
+// state is guarded by mu, and progress is announced via cnd.
 type Stream struct {
 	addr net.Addr
 	lnk  io.ReadWriteCloser
@@ -333,7 +333,7 @@ func (c *Stream) sendable() uint32 {
 }
 
 // Emit pushes a packet to the link. It must be called with mu held; the link write itself happens under the lock to
-// Preserve send ordering relative to state updates.
+// preserve send ordering relative to state updates.
 func (c *Stream) emit(p Packet) error {
 	p.ack = c.rcvNxt
 	p.win = c.rcvWnd()
@@ -354,11 +354,11 @@ func (c *Stream) fail(err error) {
 // ============================================================================
 
 // Flush moves bytes from sndBuf into the inflight queue as long as the window permits, then sends any pending pure
-// Ack. Must be called with mu held.
+// ack. Must be called with mu held.
 func (c *Stream) flush() {
 	// Data may be drained from sndBuf in any connected state until our own fin has been emitted. This matters during
-	// Half-close: app code typically calls Write followed immediately by Close, which transitions us into fin_wait or
-	// Last_ack while bytes are still queued. We must continue pushing those bytes before the fin segment.
+	// half-close: app code typically calls Write followed immediately by Close, which transitions us into fin_wait or
+	// last_ack while bytes are still queued. We must continue pushing those bytes before the fin segment.
 	for !c.sndFinDone && (c.sid == stateEstablished || c.sid == stateFinWait || c.sid == stateCloseWait || c.sid == stateLastAck) {
 		win := c.sendable()
 		if win == 0 || len(c.sndBuf) == 0 {
@@ -402,7 +402,7 @@ func (c *Stream) flush() {
 		}
 		c.sndFinSeq = c.sndNxt
 		c.sndFinDone = true
-		c.sndNxt += 1
+		c.sndNxt++
 		c.inflight = append(c.inflight, seg)
 		if err := c.emit(Packet{cmd: seg.cmd, seq: seg.seq}); err != nil {
 			c.fail(err)
@@ -449,7 +449,7 @@ func (c *Stream) retransmit(now time.Time) {
 }
 
 // Ack processes a cumulative acknowledgement. It removes acked segments from the inflight queue, updates the rtt
-// Estimator and the congestion window. Must be called with mu held.
+// estimator and the congestion window. Must be called with mu held.
 func (c *Stream) ack(ackNum uint32, win uint32) {
 	c.rwnd = win
 	if SeqGe(c.sndUna, ackNum) && ackNum != c.sndUna {
@@ -517,7 +517,7 @@ func (c *Stream) ack(ackNum uint32, win uint32) {
 // Recv path
 // ============================================================================
 
-// Deliver appends an in-order data slice to the recv buffer and reno to drain rcvOoo. Must be called with mu held.
+// Deliver appends an in-order data slice to the recv buffer and tries to drain rcvOoo. Must be called with mu held.
 func (c *Stream) deliver(data []byte) {
 	c.rcvBuf = append(c.rcvBuf, data...)
 	c.rcvNxt += uint32(len(data))
@@ -626,7 +626,7 @@ func (c *Stream) intake(seq uint32, data []byte) {
 }
 
 // IntakeFin records a fin segment, possibly via the out-of-order map until preceding data arrives. Must be called
-// With mu held.
+// with mu held.
 func (c *Stream) intakeFin(seq uint32) {
 	if SeqLt(seq, c.rcvNxt) {
 		return
@@ -757,9 +757,9 @@ func (c *Stream) Write(p []byte) (int, error) {
 }
 
 // Close implements io.Closer. It performs an orderly half-close: any bytes already accepted by Write are pushed to
-// The peer first, then a fin is sent and acknowledged. The call blocks for at most HandshakeTimeout before forcibly
-// Tearing down the link. After Close returns the connection lingers briefly so that any incoming peer fin can still
-// Be acknowledged.
+// the peer first, then a fin is sent and acknowledged. The call blocks for at most HandshakeTimeout before forcibly
+// tearing down the link. After Close returns the connection lingers briefly so that any incoming peer fin can still
+// be acknowledged.
 func (c *Stream) Close() error {
 	c.mu.Lock()
 	if c.sid == stateDead || c.wer.Get() != nil {
@@ -797,7 +797,7 @@ func (c *Stream) Close() error {
 	c.wer.Put(io.ErrClosedPipe)
 	c.mu.Unlock()
 	// Linger so we can acknowledge a peer fin that arrives just after our own fin was acked. This avoids stranding the
-	// Peer in fin_wait until its idle deadline expires.
+	// peer in fin_wait until its idle deadline expires.
 	go func() {
 		t := time.NewTimer(time.Second)
 		defer t.Stop()
@@ -835,13 +835,12 @@ func (c *Stream) dialHandshake() error {
 	// Send syn synchronously and wait for syn-ack with exponential backoff.
 	rto := Conf.RTONew
 	deadline := time.Now().Add(Conf.HandshakeTimeout)
-	for try := range Conf.HandshakeRereno {
-		_ = try
+	for range Conf.HandshakeRereno {
 		if _, err := c.lnk.Write(PacketEncode(Packet{cmd: cmdSyn, seq: 0, win: uint32(Conf.RecvBufSize)})); err != nil {
 			return err
 		}
 		// Read with a timeout managed by the udp socket. dialLink uses a connected udp socket; SetReadDeadline is
-		// Needed. We poke into the concrete type to set the deadline.
+		// needed. We poke into the concrete type to set the deadline.
 		dl, ok := c.lnk.(*ConnCli)
 		if !ok {
 			return errors.New("daze: invalid dial link")
@@ -951,7 +950,7 @@ func (l *Listener) detach(key string) {
 }
 
 // Demux reads udp packets and routes them to the matching connection. New peers that send a syn cause a fresh Stream
-// To be created and pushed into the accept queue.
+// to be created and pushed into the accept queue.
 func (l *Listener) demux() {
 	buf := make([]byte, 65536)
 	for {
