@@ -194,11 +194,13 @@ type Client struct {
 
 // Dial connects to the address on the named network.
 func (c *Client) Dial(ctx *daze.Context, network string, address string) (io.ReadWriteCloser, error) {
-	con, err := c.EpQuic.Dial(context.Background(), "udp", c.Server, ClientConfig.Do())
+	cty, end := context.WithTimeout(context.Background(), daze.Conf.DialerTimeout)
+	defer end()
+	con, err := c.EpQuic.Dial(cty, "udp", c.Server, ClientConfig.Do())
 	if err != nil {
 		return nil, err
 	}
-	stm, err := con.NewStream(context.Background())
+	stm, err := con.NewStream(cty)
 	if err != nil {
 		con.Close()
 		return nil, err
