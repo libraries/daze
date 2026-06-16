@@ -232,13 +232,7 @@ func main() {
 			flag.PrintDefaults()
 		}
 		flag.Parse()
-		cidr := func() []*net.IPNet {
-			switch strings.ToUpper(flag.Arg(0)) {
-			case "CN":
-				return daze.LoadApnic()["CN"]
-			}
-			return []*net.IPNet{}
-		}()
+		cidr := daze.LoadApnic()[strings.ToUpper(flag.Arg(0))]
 		if len(cidr) == 0 {
 			flag.Usage()
 			return
