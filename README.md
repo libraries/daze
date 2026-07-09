@@ -156,7 +156,7 @@ $ daze gen hk # Hong Kong Special Administrative Region of China
 $ daze gen mo # Macao Special Administrative Region of China
 ```
 
-The list of all supported regions is shown on the [https://www.apnic.net/about-apnic/corporate-documents/documents/corporate/apnic-service-region/](https://www.apnic.net/about-apnic/corporate-documents/documents/corporate/apnic-service-region/):
+The list of all supported regions is shown on the [https://www.apnic.net/about-apnic/corporate-documents/documents/corporate/apnic-service-region/](https://www.apnic.net/about-apnic/corporate-documents/documents/corporate/apnic-service-region/).
 
 ## License
 
