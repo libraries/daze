@@ -355,17 +355,17 @@ func (c *Client) Dial(ctx *daze.Context, network string, address string) (io.Rea
 	if err != nil {
 		return nil, err
 	}
-	con, err := c.Estab(ctx, srv, network, address)
+	rtc := &daze.ReadWriteCloser{
+		Reader: io.TeeReader(srv, rate.NewLimitsWriter(c.Limits)),
+		Writer: io.MultiWriter(srv, rate.NewLimitsWriter(c.Limits)),
+		Closer: srv,
+	}
+	con, err := c.Estab(ctx, rtc, network, address)
 	if err != nil {
-		srv.Close()
+		rtc.Close()
 		return nil, err
 	}
-	rtc := &daze.ReadWriteCloser{
-		Reader: io.TeeReader(con, rate.NewLimitsWriter(c.Limits)),
-		Writer: io.MultiWriter(con, rate.NewLimitsWriter(c.Limits)),
-		Closer: con,
-	}
-	return rtc, nil
+	return con, nil
 }
 
 // NewClient returns a new Client. Cipher is a password in string form, with no length limit.

@@ -76,14 +76,14 @@ func (s *Server) ServeDaze(w http.ResponseWriter, r *http.Request) {
 		Writer: cc,
 		Closer: cc,
 	}
-	spy := &ashe.Server{Cipher: s.Cipher}
-	ctx := &daze.Context{Cid: atomic.AddUint32(&s.NextID, 1)}
-	log.Printf("conn: %08x accept remote=%s", ctx.Cid, cc.RemoteAddr())
 	rtc := &daze.ReadWriteCloser{
 		Reader: io.TeeReader(cli, rate.NewLimitsWriter(s.Limits)),
 		Writer: io.MultiWriter(cli, rate.NewLimitsWriter(s.Limits)),
 		Closer: cli,
 	}
+	spy := &ashe.Server{Cipher: s.Cipher}
+	ctx := &daze.Context{Cid: atomic.AddUint32(&s.NextID, 1)}
+	log.Printf("conn: %08x accept remote=%s", ctx.Cid, cc.RemoteAddr())
 	if err := spy.Serve(ctx, rtc); err != nil {
 		log.Printf("conn: %08x  error %s", ctx.Cid, err)
 	}
@@ -176,6 +176,11 @@ func (c *Client) Dial(ctx *daze.Context, network string, address string) (io.Rea
 	if err != nil {
 		return nil, err
 	}
+	rtc := &daze.ReadWriteCloser{
+		Reader: io.TeeReader(srv, rate.NewLimitsWriter(c.Limits)),
+		Writer: io.MultiWriter(srv, rate.NewLimitsWriter(c.Limits)),
+		Closer: srv,
+	}
 	buf = make([]byte, 32)
 	io.ReadFull(&daze.RandomReader{}, buf[:16])
 	copy(buf[16:], c.Cipher[:16])
@@ -183,22 +188,17 @@ func (c *Client) Dial(ctx *daze.Context, network string, address string) (io.Rea
 	copy(buf[16:], sign[:])
 	req = doa.Try(http.NewRequest("POST", "http://"+c.Server+"/sync", http.NoBody))
 	req.Header.Set("Authorization", hex.EncodeToString(buf))
-	req.Write(srv)
+	req.Write(rtc)
 	// Discard responded header
 	buf = make([]byte, 147)
-	io.ReadFull(srv, buf)
+	io.ReadFull(rtc, buf)
 	spy := &ashe.Client{Cipher: c.Cipher}
-	con, err := spy.Estab(ctx, srv, network, address)
+	con, err := spy.Estab(ctx, rtc, network, address)
 	if err != nil {
-		srv.Close()
+		rtc.Close()
 		return nil, err
 	}
-	rtc := &daze.ReadWriteCloser{
-		Reader: io.TeeReader(con, rate.NewLimitsWriter(c.Limits)),
-		Writer: io.MultiWriter(con, rate.NewLimitsWriter(c.Limits)),
-		Closer: con,
-	}
-	return rtc, nil
+	return con, nil
 }
 
 // NewClient returns a new Client. Cipher is a password in string form, with no length limit.
