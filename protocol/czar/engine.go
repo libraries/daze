@@ -173,12 +173,7 @@ func (c *Client) Dial(ctx *daze.Context, network string, address string) (io.Rea
 			srv.Close()
 			return nil, err
 		}
-		rtc := &daze.ReadWriteCloser{
-			Reader: io.TeeReader(con, rate.NewLimitsWriter(c.Limits)),
-			Writer: io.MultiWriter(con, rate.NewLimitsWriter(c.Limits)),
-			Closer: con,
-		}
-		return rtc, nil
+		return con, nil
 	case <-time.After(daze.Conf.DialerTimeout):
 		return nil, fmt.Errorf("dial tcp: %s: i/o timeout", address)
 	}
@@ -196,6 +191,7 @@ func (c *Client) Run() {
 	var (
 		err error
 		mux *Mux
+		rtc *daze.ReadWriteCloser
 		rtt = 0
 		sid = 0
 		srv net.Conn
@@ -221,7 +217,12 @@ func (c *Client) Run() {
 			}
 		case clientStatusDialSuccess:
 			log.Println("czar: mux init")
-			mux = NewMuxClient(srv)
+			rtc = &daze.ReadWriteCloser{
+				Reader: io.TeeReader(srv, rate.NewLimitsWriter(c.Limits)),
+				Writer: io.MultiWriter(srv, rate.NewLimitsWriter(c.Limits)),
+				Closer: srv,
+			}
+			mux = NewMuxClient(rtc)
 			rtt = 0
 			sid = clientStatusEstablished
 		case clientStatusEstablished:
