@@ -229,7 +229,7 @@ func (c *Client) Run() {
 		clientStatusCancel
 	)
 	var (
-		don chan error
+		don = make(chan error, 1)
 		err error
 		mux *quic.Conn
 		rtt = 0
@@ -259,7 +259,6 @@ func (c *Client) Run() {
 		case clientStatusDialSuccess:
 			log.Println("etch: quic init")
 			rtt = 0
-			don = make(chan error, 1)
 			go func(mux *quic.Conn) {
 				don <- mux.Wait(context.Background())
 			}(mux)
