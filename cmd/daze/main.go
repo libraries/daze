@@ -38,28 +38,31 @@ var Conf = struct {
 	Version:  "v1.26.5",
 }
 
-const helpMsg = `Usage: daze <command> [<args>]
+const helpMain = `Usage: daze <command> [<args>]
 
 The most commonly used daze commands are:
   server     Start daze server
   client     Start daze client
-  gen        Generate or update rule.cidr
-  spd        Run daze protocol speed test
-  ver        Print the daze version number and exit
+  cidr       Generate or update rule.cidr
+  fast       Run daze protocol speed test
 
 Run 'daze <command> -h' for more information on a command.`
 
-const helpGen = `Usage: daze gen <region>
+const helpCidr = `Usage: daze cidr <region>
 
 Supported region:
   CN         China
+  KP         Democratic People's Republic of Korea
+  HK         Hong Kong Special Administrative Region of China
+  ..         ...
 
-Executing this command will update rule.cidr by remote data source.
+Executing this command will update rule.cidr by remote data source. The list of all supported regions is shown on the
+https://www.apnic.net/about-apnic/corporate-documents/documents/corporate/apnic-service-region/
 `
 
 func main() {
 	if len(os.Args) <= 1 {
-		fmt.Println(helpMsg)
+		fmt.Println(helpMain)
 		return
 	}
 	// If daze runs in Android through termux, then we set a default dns for it. See:
@@ -230,7 +233,26 @@ func main() {
 		// Hang prevent program from exiting.
 		gracefulexit.Wait()
 		log.Println("main: exit")
-	case "spd":
+	case "cidr":
+		flag.Usage = func() {
+			fmt.Fprint(flag.CommandLine.Output(), helpCidr)
+			flag.PrintDefaults()
+		}
+		flag.Parse()
+		if flag.NArg() != 1 {
+			flag.Usage()
+			return
+		}
+		cidr := daze.LoadApnic()[strings.ToUpper(flag.Arg(0))]
+		name := filepath.Join(resExec, Conf.PathCIDR)
+		log.Println("main: save apnic data into", name)
+		f := doa.Try(os.OpenFile(name, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644))
+		defer f.Close()
+		for _, e := range cidr {
+			fmt.Fprintln(f, "L", e.String())
+		}
+		log.Println("main: save apnic data done")
+	case "fast":
 		dazeClientListenOn := "127.0.0.1:28080"
 		dazeServerListenOn := "127.0.0.1:28081"
 		dazeTesterListenOn := "127.0.0.1:28082"
@@ -323,28 +345,9 @@ func main() {
 			table.Body = append(table.Body, []string{"etch", daze.SizeShower(dspd), daze.SizeShower(uspd)})
 		}()
 		table.Print()
-	case "gen":
-		flag.Usage = func() {
-			fmt.Fprint(flag.CommandLine.Output(), helpGen)
-			flag.PrintDefaults()
-		}
-		flag.Parse()
-		cidr := daze.LoadApnic()[strings.ToUpper(flag.Arg(0))]
-		if len(cidr) == 0 {
-			flag.Usage()
-			return
-		}
-		name := filepath.Join(resExec, Conf.PathCIDR)
-		log.Println("main: save apnic data into", name)
-		f := doa.Try(os.OpenFile(name, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644))
-		defer f.Close()
-		for _, e := range cidr {
-			fmt.Fprintln(f, "L", e.String())
-		}
-		log.Println("main: save apnic data done")
-	case "ver":
+	case "-h", "--help":
+		fmt.Println(helpMain)
+	case "-v", "--version":
 		fmt.Println("daze", Conf.Version)
-	case "", "-h", "--help":
-		fmt.Println(helpMsg)
 	}
 }
