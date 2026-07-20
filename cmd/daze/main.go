@@ -284,7 +284,7 @@ func main() {
 
 		table := pretty.NewTable()
 		table.Conf = []string{"<", ">", ">"}
-		table.Head = []string{"name", "down", "up"}
+		table.Head = []string{"protocol", "download", "upload"}
 		func() {
 			dazeServer := ashe.NewServer(dazeServerListenOn, "")
 			defer dazeServer.Close()
@@ -292,9 +292,9 @@ func main() {
 			dazeClient := ashe.NewClient(dazeServerListenOn, "")
 			cli := doa.Try(dazeClient.Dial(&daze.Context{}, "tcp", dazeTesterListenOn))
 			defer cli.Close()
-			dspd := dspdFunc(cli)
-			uspd := uspdFunc(cli)
-			table.Body = append(table.Body, []string{"ashe", daze.SizeShower(dspd), daze.SizeShower(uspd)})
+			dspd := daze.SizeShower(dspdFunc(cli)) + "/s"
+			uspd := daze.SizeShower(uspdFunc(cli)) + "/s"
+			table.Body = append(table.Body, []string{"ashe", dspd, uspd})
 		}()
 		func() {
 			dazeServer := baboon.NewServer(dazeServerListenOn, "")
@@ -303,9 +303,9 @@ func main() {
 			dazeClient := baboon.NewClient(dazeServerListenOn, "")
 			cli := doa.Try(dazeClient.Dial(&daze.Context{}, "tcp", dazeTesterListenOn))
 			defer cli.Close()
-			dspd := dspdFunc(cli)
-			uspd := uspdFunc(cli)
-			table.Body = append(table.Body, []string{"baboon", daze.SizeShower(dspd), daze.SizeShower(uspd)})
+			dspd := daze.SizeShower(dspdFunc(cli)) + "/s"
+			uspd := daze.SizeShower(uspdFunc(cli)) + "/s"
+			table.Body = append(table.Body, []string{"baboon", dspd, uspd})
 		}()
 		func() {
 			dazeServer := czar.NewServer(dazeServerListenOn, "")
@@ -315,9 +315,9 @@ func main() {
 			defer dazeClient.Close()
 			cli := doa.Try(dazeClient.Dial(&daze.Context{}, "tcp", dazeTesterListenOn))
 			defer cli.Close()
-			dspd := dspdFunc(cli)
-			uspd := uspdFunc(cli)
-			table.Body = append(table.Body, []string{"czar", daze.SizeShower(dspd), daze.SizeShower(uspd)})
+			dspd := daze.SizeShower(dspdFunc(cli)) + "/s"
+			uspd := daze.SizeShower(uspdFunc(cli)) + "/s"
+			table.Body = append(table.Body, []string{"czar", dspd, uspd})
 		}()
 		func() {
 			dazeServer := dahlia.NewServer(dazeServerListenOn, dazeTesterListenOn, "")
@@ -328,9 +328,9 @@ func main() {
 			doa.Nil(dazeClient.Run())
 			cli := doa.Try(daze.Dial("tcp", dazeClientListenOn))
 			defer cli.Close()
-			dspd := dspdFunc(cli)
-			uspd := uspdFunc(cli)
-			table.Body = append(table.Body, []string{"dahlia", daze.SizeShower(dspd), daze.SizeShower(uspd)})
+			dspd := daze.SizeShower(dspdFunc(cli)) + "/s"
+			uspd := daze.SizeShower(uspdFunc(cli)) + "/s"
+			table.Body = append(table.Body, []string{"dahlia", dspd, uspd})
 		}()
 		func() {
 			dazeServer := etch.NewServer(dazeServerListenOn, "")
@@ -340,9 +340,9 @@ func main() {
 			defer dazeClient.Close()
 			cli := doa.Try(dazeClient.Dial(&daze.Context{}, "tcp", dazeTesterListenOn))
 			defer cli.Close()
-			dspd := dspdFunc(cli)
-			uspd := uspdFunc(cli)
-			table.Body = append(table.Body, []string{"etch", daze.SizeShower(dspd), daze.SizeShower(uspd)})
+			dspd := daze.SizeShower(dspdFunc(cli)) + "/s"
+			uspd := daze.SizeShower(uspdFunc(cli)) + "/s"
+			table.Body = append(table.Body, []string{"etch", dspd, uspd})
 		}()
 		table.Print()
 	case "-h", "--help":
