@@ -1116,12 +1116,28 @@ func SizeParser(s string) uint64 {
 	f := doa.Try(strconv.ParseFloat(s[:len(s)-1], 64))
 	u := strings.ToLower(s[len(s)-1:])
 	switch u {
+	case "b":
+		return uint64(f)
 	case "k":
 		return uint64(f * 1024)
 	case "m":
 		return uint64(f * 1024 * 1024)
 	case "g":
 		return uint64(f * 1024 * 1024 * 1024)
+	}
+	panic("unreachable")
+}
+
+func SizeShower(s uint64) string {
+	switch {
+	case s < 1024:
+		return fmt.Sprintf("%db", s)
+	case s < 1024*1024:
+		return fmt.Sprintf("%.1fk", float64(s)/1024)
+	case s < 1024*1024*1024:
+		return fmt.Sprintf("%.1fm", float64(s)/1024/1024)
+	case s < 1024*1024*1024*1024:
+		return fmt.Sprintf("%.1fg", float64(s)/1024/1024/1024)
 	}
 	panic("unreachable")
 }

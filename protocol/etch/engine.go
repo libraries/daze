@@ -7,7 +7,6 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -125,9 +124,6 @@ func (s *Server) Run() error {
 		for {
 			con, err := l.Accept(context.Background())
 			if err != nil {
-				if !errors.Is(err, context.Canceled) && !errors.Is(err, net.ErrClosed) {
-					log.Println("main:", err)
-				}
 				break
 			}
 			go func(con *quic.Conn) {
@@ -136,9 +132,6 @@ func (s *Server) Run() error {
 				for {
 					stm, err := con.AcceptStream(context.Background())
 					if err != nil {
-						if !errors.Is(err, net.ErrClosed) {
-							log.Println("main:", err)
-						}
 						return
 					}
 					cli := &Stream{rem: rem, stm: stm}

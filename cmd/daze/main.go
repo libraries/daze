@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -16,6 +18,7 @@ import (
 	"github.com/libraries/daze/lib/doa"
 	"github.com/libraries/daze/lib/expvpp"
 	"github.com/libraries/daze/lib/gracefulexit"
+	"github.com/libraries/daze/lib/pretty"
 	"github.com/libraries/daze/lib/rate"
 	"github.com/libraries/daze/protocol/ashe"
 	"github.com/libraries/daze/protocol/baboon"
@@ -41,6 +44,7 @@ The most commonly used daze commands are:
   server     Start daze server
   client     Start daze client
   gen        Generate or update rule.cidr
+  spd        Run daze protocol speed test
   ver        Print the daze version number and exit
 
 Run 'daze <command> -h' for more information on a command.`
@@ -226,6 +230,99 @@ func main() {
 		// Hang prevent program from exiting.
 		gracefulexit.Wait()
 		log.Println("main: exit")
+	case "spd":
+		dazeClientListenOn := "127.0.0.1:28080"
+		dazeServerListenOn := "127.0.0.1:28081"
+		dazeTesterListenOn := "127.0.0.1:28082"
+
+		dazeTester := daze.NewTester(dazeTesterListenOn)
+		doa.Nil(dazeTester.TCP())
+		defer dazeTester.Close()
+
+		dspdFunc := func(cli io.ReadWriteCloser) uint64 {
+			req := bytes.Repeat([]byte{0x00, 0x00, 0x80, 0x00}, 1024*8)
+			doa.Try(cli.Write(req))
+			tic := time.Now()
+			doa.Try(io.CopyN(io.Discard, cli, 256*1024*1024))
+			ela := time.Since(tic)
+			spd := float64(256*1024*1024) / ela.Seconds()
+			return uint64(spd)
+		}
+		uspdFunc := func(cli io.ReadWriteCloser) uint64 {
+			reqOne := append([]byte{0x01, 0x00, 0x80, 0x00}, make([]byte, 32*1024)...)
+			reqFin := []byte{0x00, 0x00, 0x00, 0x01}
+			req := append(bytes.Repeat(reqOne, 1024*8), reqFin...)
+			tic := time.Now()
+			doa.Try(cli.Write(req))
+			doa.Try(io.CopyN(io.Discard, cli, 1))
+			ela := time.Since(tic)
+			spd := float64(256*1024*1024) / ela.Seconds()
+			return uint64(spd)
+		}
+
+		table := pretty.NewTable()
+		table.Conf = []string{"<", ">", ">"}
+		table.Head = []string{"name", "down", "up"}
+		func() {
+			dazeServer := ashe.NewServer(dazeServerListenOn, "")
+			defer dazeServer.Close()
+			doa.Nil(dazeServer.Run())
+			dazeClient := ashe.NewClient(dazeServerListenOn, "")
+			cli := doa.Try(dazeClient.Dial(&daze.Context{}, "tcp", dazeTesterListenOn))
+			defer cli.Close()
+			dspd := dspdFunc(cli)
+			uspd := uspdFunc(cli)
+			table.Body = append(table.Body, []string{"ashe", daze.SizeShower(dspd), daze.SizeShower(uspd)})
+		}()
+		func() {
+			dazeServer := baboon.NewServer(dazeServerListenOn, "")
+			defer dazeServer.Close()
+			doa.Nil(dazeServer.Run())
+			dazeClient := baboon.NewClient(dazeServerListenOn, "")
+			cli := doa.Try(dazeClient.Dial(&daze.Context{}, "tcp", dazeTesterListenOn))
+			defer cli.Close()
+			dspd := dspdFunc(cli)
+			uspd := uspdFunc(cli)
+			table.Body = append(table.Body, []string{"baboon", daze.SizeShower(dspd), daze.SizeShower(uspd)})
+		}()
+		func() {
+			dazeServer := czar.NewServer(dazeServerListenOn, "")
+			defer dazeServer.Close()
+			doa.Nil(dazeServer.Run())
+			dazeClient := czar.NewClient(dazeServerListenOn, "")
+			defer dazeClient.Close()
+			cli := doa.Try(dazeClient.Dial(&daze.Context{}, "tcp", dazeTesterListenOn))
+			defer cli.Close()
+			dspd := dspdFunc(cli)
+			uspd := uspdFunc(cli)
+			table.Body = append(table.Body, []string{"czar", daze.SizeShower(dspd), daze.SizeShower(uspd)})
+		}()
+		func() {
+			dazeServer := dahlia.NewServer(dazeServerListenOn, dazeTesterListenOn, "")
+			defer dazeServer.Close()
+			doa.Nil(dazeServer.Run())
+			dazeClient := dahlia.NewClient(dazeClientListenOn, dazeServerListenOn, "")
+			defer dazeClient.Close()
+			doa.Nil(dazeClient.Run())
+			cli := doa.Try(daze.Dial("tcp", dazeClientListenOn))
+			defer cli.Close()
+			dspd := dspdFunc(cli)
+			uspd := uspdFunc(cli)
+			table.Body = append(table.Body, []string{"dahlia", daze.SizeShower(dspd), daze.SizeShower(uspd)})
+		}()
+		func() {
+			dazeServer := etch.NewServer(dazeServerListenOn, "")
+			defer dazeServer.Close()
+			doa.Nil(dazeServer.Run())
+			dazeClient := etch.NewClient(dazeServerListenOn, "")
+			defer dazeClient.Close()
+			cli := doa.Try(dazeClient.Dial(&daze.Context{}, "tcp", dazeTesterListenOn))
+			defer cli.Close()
+			dspd := dspdFunc(cli)
+			uspd := uspdFunc(cli)
+			table.Body = append(table.Body, []string{"etch", daze.SizeShower(dspd), daze.SizeShower(uspd)})
+		}()
+		table.Print()
 	case "gen":
 		flag.Usage = func() {
 			fmt.Fprint(flag.CommandLine.Output(), helpGen)
