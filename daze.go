@@ -1322,7 +1322,14 @@ func (t *Tester) TCP() error {
 	return nil
 }
 
-// TCPServe serves incoming connections.
+// TCPServe serves incoming connections. The protocol is as follows:
+// +-----+-----+-----+-----+
+// | 0x0 | Val |    Len    |
+// +-----+-----+-----+-----+-----+-----+
+// | 0x1 | Val |    Len    |    Msg    |
+// +-----+-----+-----+-----+-----+-----+
+// | 0x2 |       Rsv       |
+// +-----+-----+-----+-----+
 func (t *Tester) TCPServe(cli io.ReadWriteCloser) {
 	buf := make([]byte, 2048)
 	for {
@@ -1376,7 +1383,14 @@ func (t *Tester) UDP() error {
 	return nil
 }
 
-// UDPServe serves incoming connections.
+// UDPServe serves incoming connections. The protocol is as follows:
+// +-----+-----+-----+-----+
+// | 0x0 | Val |    Len    |
+// +-----+-----+-----+-----+-----+-----+
+// | 0x1 | Val |    Len    |    Msg    |
+// +-----+-----+-----+-----+-----+-----+
+// | 0x2 |       Rsv       |
+// +-----+-----+-----+-----+
 func (t *Tester) UDPServe(cli *net.UDPConn) error {
 	buf := make([]byte, 2048)
 	for {
