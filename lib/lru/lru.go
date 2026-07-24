@@ -2,6 +2,7 @@
 package lru
 
 import (
+	"log"
 	"sync"
 )
 
@@ -134,8 +135,11 @@ func (l *Lru[K, V]) Set(k K, v V) {
 	l.C[k] = l.List.Insert(&Elem[K, V]{K: k, V: v})
 }
 
-// New returns a new LRU cache. If size is zero, the cache has no limit.
+// New returns a new LRU cache.
 func New[K comparable, V any](size int) *Lru[K, V] {
+	if size <= 0 {
+		log.Panicln("lru: size must be greater than zero")
+	}
 	return &Lru[K, V]{
 		Drop: func(k K, v V) {},
 		Size: size,
