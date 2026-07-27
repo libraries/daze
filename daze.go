@@ -1097,10 +1097,24 @@ type RandomReader struct{}
 
 // Read implements io.Reader.
 func (r *RandomReader) Read(p []byte) (int, error) {
-	for i := range len(p) {
-		p[i] = byte(rand.Uint64())
+	n := len(p)
+	for len(p) >= 8 {
+		binary.BigEndian.PutUint64(p[:8], rand.Uint64())
+		p = p[8:]
 	}
-	return len(p), nil
+	for len(p) >= 4 {
+		binary.BigEndian.PutUint32(p[:4], rand.Uint32())
+		p = p[4:]
+	}
+	for len(p) >= 2 {
+		binary.BigEndian.PutUint16(p[:2], uint16(rand.Uint32()))
+		p = p[2:]
+	}
+	for len(p) >= 1 {
+		p[0] = byte(rand.Uint32())
+		p = p[1:]
+	}
+	return n, nil
 }
 
 // Salt converts the stupid password passed in by the user to 32-sized byte array.
