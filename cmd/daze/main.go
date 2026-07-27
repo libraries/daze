@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"flag"
 	"fmt"
 	"io"
@@ -256,29 +255,25 @@ func main() {
 		dazeClientListenOn := "127.0.0.1:28080"
 		dazeServerListenOn := "127.0.0.1:28081"
 		dazeTesterListenOn := "127.0.0.1:28082"
+		bodyLength := 256 * 1024 * 1024
 
-		dazeTester := daze.NewTester(dazeTesterListenOn)
-		doa.Nil(dazeTester.TCP())
+		dazeTester := daze.NewTester()
+		doa.Nil(dazeTester.ListenTCP(dazeTesterListenOn))
 		defer dazeTester.Close()
 
 		dspdFunc := func(cli io.ReadWriteCloser) uint64 {
-			req := bytes.Repeat([]byte{0x00, 0x00, 0x80, 0x00}, 1024*8)
-			doa.Try(cli.Write(req))
 			tic := time.Now()
-			doa.Try(io.CopyN(io.Discard, cli, 256*1024*1024))
+			dazeTester.StreamRead2(cli, bodyLength)
 			ela := time.Since(tic)
-			spd := float64(256*1024*1024) / ela.Seconds()
+			spd := float64(bodyLength) / ela.Seconds()
 			return uint64(spd)
 		}
 		uspdFunc := func(cli io.ReadWriteCloser) uint64 {
-			reqOne := append([]byte{0x01, 0x00, 0x80, 0x00}, make([]byte, 32*1024)...)
-			reqFin := []byte{0x00, 0x00, 0x00, 0x01}
-			req := append(bytes.Repeat(reqOne, 1024*8), reqFin...)
 			tic := time.Now()
-			doa.Try(cli.Write(req))
-			doa.Try(io.CopyN(io.Discard, cli, 1))
+			dazeTester.StreamWrite(cli, bodyLength)
+			dazeTester.StreamRead2(cli, 1)
 			ela := time.Since(tic)
-			spd := float64(256*1024*1024) / ela.Seconds()
+			spd := float64(bodyLength) / ela.Seconds()
 			return uint64(spd)
 		}
 

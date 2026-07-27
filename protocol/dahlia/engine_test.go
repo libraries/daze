@@ -1,8 +1,6 @@
 package dahlia
 
 import (
-	"encoding/binary"
-	"io"
 	"math/rand/v2"
 	"testing"
 
@@ -18,9 +16,9 @@ const (
 )
 
 func TestProtocolDahliaTCP(t *testing.T) {
-	dazeTester := daze.NewTester(DazeTesterListenOn)
+	dazeTester := daze.NewTester()
 	defer dazeTester.Close()
-	dazeTester.TCP()
+	dazeTester.ListenTCP(DazeTesterListenOn)
 
 	dazeServer := NewServer(DazeServerListenOn, DazeTesterListenOn, Password)
 	defer dazeServer.Close()
@@ -32,40 +30,7 @@ func TestProtocolDahliaTCP(t *testing.T) {
 	cli := doa.Try(daze.Dial("tcp", DazeClientListenOn))
 	defer cli.Close()
 
-	var (
-		bsz = max(4, int(rand.Uint32N(256)))
-		buf = make([]byte, bsz)
-		cnt int
-		rsz = int(rand.Uint32N(65536))
-	)
-	copy(buf[0:2], []byte{0x00, 0x00})
-	binary.BigEndian.PutUint16(buf[2:], uint16(rsz))
-	doa.Try(cli.Write(buf[:4]))
-	cnt = 0
-	for {
-		e := min(rand.IntN(bsz+1), rsz-cnt)
-		n := doa.Try(io.ReadFull(cli, buf[:e]))
-		for i := range n {
-			doa.Doa(buf[i] == 0x00)
-		}
-		cnt += n
-		if cnt == rsz {
-			break
-		}
-	}
-	copy(buf[0:2], []byte{0x01, 0x00})
-	binary.BigEndian.PutUint16(buf[2:], uint16(rsz))
-	doa.Try(cli.Write(buf[:4]))
-	for i := range bsz {
-		buf[i] = 0x00
-	}
-	cnt = 0
-	for {
-		e := min(rand.IntN(bsz+1), rsz-cnt)
-		n := doa.Try(cli.Write(buf[:e]))
-		cnt += n
-		if cnt == rsz {
-			break
-		}
-	}
+	doa.Nil(dazeTester.StreamRead2(cli, rand.IntN(256)))
+	doa.Nil(dazeTester.StreamWrite(cli, rand.IntN(256)))
+	doa.Nil(dazeTester.StreamClose(cli))
 }

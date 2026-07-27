@@ -1294,143 +1294,145 @@ var ResolverPublic = struct {
 //          \/__/             \/__/         \/__/     \/__/
 // ============================================================================
 
-// A remote server for testing.
+// A server and client for testing.
 type Tester struct {
-	Listen string
 	Closer io.Closer
 }
 
-// Run it on TCP.
-func (t *Tester) TCP() error {
-	s, err := net.Listen("tcp", t.Listen)
-	if err != nil {
-		return err
+// Close closes the active listener owned by the tester.
+func (t *Tester) Close() error {
+	return t.Closer.Close()
+}
+
+// HandleTCP serves the tester's custom TCP stream protocol.
+func (t *Tester) HandleTCP(cli io.ReadWriteCloser) {
+	buf := make([]byte, 4)
+	for {
+		_, err := io.ReadFull(cli, buf[:1])
+		if err != nil {
+			break
+		}
+		switch buf[0] {
+		case 0:
+			doa.Try(io.ReadFull(cli, buf[:4]))
+			cnt := binary.BigEndian.Uint32(buf[:4])
+			doa.Try(io.CopyN(cli, &RandomReader{}, int64(cnt)))
+		case 1:
+			doa.Try(io.ReadFull(cli, buf[:4]))
+			cnt := binary.BigEndian.Uint32(buf[:4])
+			doa.Try(io.CopyN(io.Discard, cli, int64(cnt)))
+		case 2:
+			cli.Close()
+		}
 	}
+}
+
+// HandleUDP serves the tester's custom UDP packet protocol.
+func (t *Tester) HandleUDP(cli *net.UDPConn) error {
+	buf := make([]byte, 2048)
+	for {
+		n, rmt, err := cli.ReadFromUDP(buf)
+		if err != nil {
+			break
+		}
+		switch buf[0] {
+		case 0:
+			cnt := binary.BigEndian.Uint32(buf[1:5])
+			doa.Try(io.ReadFull(&RandomReader{}, buf[:cnt]))
+			doa.Try(cli.WriteToUDP(buf[:cnt], rmt))
+		case 1:
+			cnt := binary.BigEndian.Uint32(buf[1:5])
+			doa.Doa(n == int(cnt)+5)
+		}
+	}
+	return nil
+}
+
+// ListenTCP starts a TCP listener and handles accepted connections in goroutines.
+func (t *Tester) ListenTCP(listen string) error {
+	s := doa.Try(net.Listen("tcp", listen))
 	t.Closer = s
 	go func() {
 		for {
-			cli, err := s.Accept()
+			c, err := s.Accept()
 			if err != nil {
-				if !errors.Is(err, net.ErrClosed) {
-					log.Println("main:", err)
-				}
 				break
 			}
-			go t.TCPServe(cli)
+			go func() {
+				defer c.Close()
+				t.HandleTCP(c)
+			}()
 		}
 	}()
 	return nil
 }
 
-// TCPServe serves incoming connections. The protocol is as follows:
-// +-----+-----+-----+-----+
-// | 0x0 | Val |    Len    |
-// +-----+-----+-----+-----+-----+-----+
-// | 0x1 | Val |    Len    |    Msg    |
-// +-----+-----+-----+-----+-----+-----+
-// | 0x2 |       Rsv       |
-// +-----+-----+-----+-----+
-func (t *Tester) TCPServe(cli io.ReadWriteCloser) {
-	buf := make([]byte, 2048)
-	for {
-		_, err := io.ReadFull(cli, buf[:4])
-		if err != nil {
-			break
-		}
-		cmd := buf[0]
-		switch cmd {
-		case 0:
-			val := buf[1]
-			cnt := int(binary.BigEndian.Uint16(buf[2:4]))
-			for i := range len(buf) {
-				buf[i] = val
-			}
-			for cnt >= len(buf) {
-				cli.Write(buf)
-				cnt -= len(buf)
-			}
-			if cnt != 0 {
-				cli.Write(buf[:cnt])
-			}
-		case 1:
-			val := buf[1]
-			cnt := int(binary.BigEndian.Uint16(buf[2:4]))
-			for cnt >= len(buf) {
-				io.ReadFull(cli, buf)
-				for i := range len(buf) {
-					doa.Doa(buf[i] == val)
-				}
-				cnt -= len(buf)
-			}
-			if cnt != 0 {
-				io.ReadFull(cli, buf[:cnt])
-				for i := range cnt {
-					doa.Doa(buf[i] == val)
-				}
-			}
-		case 2:
-			cli.Close()
-		}
-	}
-}
-
-// Run it on UDP.
-func (t *Tester) UDP() error {
-	addr := doa.Try(net.ResolveUDPAddr("udp", t.Listen))
+// ListenUDP starts a UDP listener and serves datagrams in a background goroutine.
+func (t *Tester) ListenUDP(listen string) error {
+	addr := doa.Try(net.ResolveUDPAddr("udp", listen))
 	conn := doa.Try(net.ListenUDP("udp", addr))
 	t.Closer = conn
-	go t.UDPServe(conn)
+	go t.HandleUDP(conn)
 	return nil
 }
 
-// UDPServe serves incoming connections. The protocol is as follows:
-// +-----+-----+-----+-----+
-// | 0x0 | Val |    Len    |
-// +-----+-----+-----+-----+-----+-----+
-// | 0x1 | Val |    Len    |    Msg    |
-// +-----+-----+-----+-----+-----+-----+
-// | 0x2 |       Rsv       |
-// +-----+-----+-----+-----+
-func (t *Tester) UDPServe(cli *net.UDPConn) error {
-	buf := make([]byte, 2048)
-	for {
-		_, addr, err := cli.ReadFromUDP(buf)
-		if err != nil {
-			break
-		}
-		cmd := buf[0]
-		switch cmd {
-		case 0:
-			val := buf[1]
-			cnt := binary.BigEndian.Uint16(buf[2:4])
-			for i := range cnt {
-				buf[i] = val
-			}
-			doa.Try(cli.WriteToUDP(buf[:cnt], addr))
-		case 1:
-			val := buf[1]
-			cnt := binary.BigEndian.Uint16(buf[2:4])
-			for i := range cnt {
-				doa.Doa(buf[4+i] == val)
-			}
-		case 2:
-			cli.Close()
-		}
+// PacketRead2 sends a read2 packet.
+func (t *Tester) PacketRead2(c io.ReadWriteCloser, n int) error {
+	buf := make([]byte, 5)
+	buf[0] = 0
+	binary.BigEndian.PutUint32(buf[1:5], uint32(n))
+	err := doa.Err(c.Write(buf))
+	if err != nil {
+		return err
 	}
-	return nil
+	return doa.Err(io.CopyN(io.Discard, c, int64(n)))
 }
 
-// Close listener.
-func (t *Tester) Close() error {
-	if t.Closer != nil {
-		return t.Closer.Close()
+// PacketWrite sends a write packet.
+func (t *Tester) PacketWrite(c io.ReadWriteCloser, n int) error {
+	buf := make([]byte, 5+n)
+	buf[0] = 1
+	binary.BigEndian.PutUint32(buf[1:5], uint32(n))
+	io.ReadFull(&RandomReader{}, buf[5:])
+	return doa.Err(c.Write(buf))
+}
+
+// StreamRead1 sends a read1 packet.
+func (t *Tester) StreamRead1(c io.ReadWriteCloser, n int) error {
+	buf := make([]byte, 1)
+	return doa.Err(io.ReadFull(c, buf))
+}
+
+// StreamRead2 sends a read2 packet.
+func (t *Tester) StreamRead2(c io.ReadWriteCloser, n int) error {
+	buf := make([]byte, 5)
+	buf[0] = 0
+	binary.BigEndian.PutUint32(buf[1:5], uint32(n))
+	err := doa.Err(c.Write(buf))
+	if err != nil {
+		return err
 	}
-	return nil
+	return doa.Err(io.CopyN(io.Discard, c, int64(n)))
+}
+
+// StreamWrite sends a write packet.
+func (t *Tester) StreamWrite(c io.ReadWriteCloser, n int) error {
+	buf := make([]byte, 5)
+	buf[0] = 1
+	binary.BigEndian.PutUint32(buf[1:5], uint32(n))
+	err := doa.Err(c.Write(buf))
+	if err != nil {
+		return err
+	}
+	return doa.Err(io.CopyN(c, &RandomReader{}, int64(n)))
+}
+
+// StreamClose sends a close packet.
+func (t *Tester) StreamClose(c io.ReadWriteCloser) error {
+	return doa.Err(c.Write([]byte{2}))
 }
 
 // NewTester returns a new Tester.
-func NewTester(listen string) *Tester {
-	return &Tester{
-		Listen: listen,
-	}
+func NewTester() *Tester {
+	return &Tester{}
 }
