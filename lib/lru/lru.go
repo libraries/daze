@@ -65,7 +65,7 @@ func (l *List[K, V]) Update(e *Elem[K, V]) {
 type Lru[K comparable, V any] struct {
 	// Drop is called automatically when an elem is deleted.
 	Drop func(k K, v V)
-	// Size is the maximum number of cache entries before an item is evicted. Zero means no limit.
+	// Size is the maximum number of cache entries before an item is evicted.
 	Size int
 	List *List[K, V]
 	C    map[K]*Elem[K, V]
