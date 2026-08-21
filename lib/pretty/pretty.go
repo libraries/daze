@@ -7,6 +7,8 @@ import (
 	"os"
 	"slices"
 	"strings"
+
+	"github.com/libraries/daze/lib/lognoln"
 )
 
 // Progress represents a progress bar in the terminal.
@@ -50,7 +52,10 @@ func (p *Progress) Print(percent float64) {
 	buf[48] = num[0]
 	buf[49] = num[1]
 	buf[50] = num[2]
-	log.Println("pretty:", string(buf))
+	lognoln.Print("pretty:", string(buf))
+	if percent == 1 {
+		log.Default().Writer().Write([]byte{'\n'})
+	}
 }
 
 // NewProgress creates a new Progress instance.
