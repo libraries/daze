@@ -15,7 +15,7 @@ import (
 // A Stream managed by the multiplexer.
 type Stream struct {
 	cat time.Time
-	idx uint8
+	idx uint16
 	mux *Mux
 	rbf []byte
 	rch chan []byte
@@ -33,8 +33,8 @@ func (s *Stream) Close() error {
 		s.mux.pri.Pri(0, func() error {
 			mph := make([]byte, 4)
 			mph[0] = 0x02
-			mph[1] = s.idx
-			mph[2] = 0x00
+			mph[1] = 0x00
+			binary.BigEndian.PutUint16(mph[2:4], s.idx)
 			s.mux.con.Write(mph)
 			return nil
 		})
@@ -50,8 +50,8 @@ func (s *Stream) Esolc() error {
 		s.mux.pri.Pri(0, func() error {
 			mph := make([]byte, 4)
 			mph[0] = 0x02
-			mph[1] = s.idx
-			mph[2] = 0x01
+			mph[1] = 0x01
+			binary.BigEndian.PutUint16(mph[2:4], s.idx)
 			s.mux.con.Write(mph)
 			return nil
 		})
@@ -102,19 +102,20 @@ func (s *Stream) Write(p []byte) (int, error) {
 	)
 	for {
 		switch {
-		case len(p) >= Conf.PacketSize-4:
+		case len(p) >= Conf.PacketSize-6:
 			buf = make([]byte, Conf.PacketSize)
-			l = Conf.PacketSize - 4
+			l = Conf.PacketSize - 6
 		case len(p) >= 1:
-			buf = make([]byte, 4+len(p))
+			buf = make([]byte, 6+len(p))
 			l = len(p)
 		case len(p) >= 0:
 			return n, nil
 		}
 		buf[0] = 0x01
-		buf[1] = s.idx
-		binary.BigEndian.PutUint16(buf[2:4], uint16(l))
-		copy(buf[4:], p[:l])
+		buf[1] = 0x00
+		binary.BigEndian.PutUint16(buf[2:4], s.idx)
+		binary.BigEndian.PutUint16(buf[4:6], uint16(l))
+		copy(buf[6:], p[:l])
 		p = p[l:]
 		z = 2 - max(cmp.Compare(Conf.FastWriteDuration, time.Since(s.cat)), 0)
 		doa.Doa(z >= 1)
@@ -138,7 +139,7 @@ func (s *Stream) Write(p []byte) (int, error) {
 }
 
 // NewStream returns a new Stream.
-func NewStream(idx uint8, mux *Mux) *Stream {
+func NewStream(idx uint16, mux *Mux) *Stream {
 	return &Stream{
 		cat: time.Now(),
 		idx: idx,
@@ -153,7 +154,7 @@ func NewStream(idx uint8, mux *Mux) *Stream {
 }
 
 // NewWither returns a new Stream. Stream has been automatically closed, used as a placeholder.
-func NewWither(idx uint8, mux *Mux) *Stream {
+func NewWither(idx uint16, mux *Mux) *Stream {
 	stm := NewStream(idx, mux)
 	stm.zo0.Do(func() {})
 	stm.zo1.Do(func() {})
@@ -186,7 +187,7 @@ func (m *Mux) Close() error {
 func (m *Mux) Open() (*Stream, error) {
 	var (
 		err error
-		idx uint8
+		idx uint16
 		stm *Stream
 	)
 	idx, err = m.idp.Get()
@@ -196,7 +197,8 @@ func (m *Mux) Open() (*Stream, error) {
 	err = m.pri.Pri(0, func() error {
 		mph := make([]byte, 4)
 		mph[0] = 0x00
-		mph[1] = idx
+		mph[1] = 0x00
+		binary.BigEndian.PutUint16(mph[2:4], idx)
 		return doa.Err(m.con.Write(mph))
 	})
 	if err != nil {
@@ -215,7 +217,7 @@ func (m *Mux) Recv() {
 		buf = make([]byte, 4)
 		cmd uint8
 		err error
-		idx uint8
+		idx uint16
 		msg []byte
 		old *Stream
 		prb = time.AfterFunc(Conf.IdleProbeDuration, func() {
@@ -242,7 +244,7 @@ func (m *Mux) Recv() {
 			break
 		}
 		cmd = buf[0]
-		idx = buf[1]
+		idx = binary.BigEndian.Uint16(buf[2:4])
 		switch cmd {
 		case 0x00:
 			// Make sure the stream has been closed properly.
@@ -256,7 +258,12 @@ func (m *Mux) Recv() {
 			m.usb[idx] = stm
 			m.ach <- stm
 		case 0x01:
-			bsz = binary.BigEndian.Uint16(buf[2:4])
+			_, err = io.ReadFull(m.con, buf[:2])
+			if err != nil {
+				m.con.Close()
+				break
+			}
+			bsz = binary.BigEndian.Uint16(buf[:2])
 			msg = make([]byte, bsz)
 			_, err = io.ReadFull(m.con, msg)
 			if err != nil {
@@ -283,6 +290,8 @@ func (m *Mux) Recv() {
 					mph := make([]byte, 4)
 					mph[0] = 0x03
 					mph[1] = 0x01
+					mph[2] = 0x00
+					mph[3] = 0x00
 					return doa.Err(m.con.Write(mph))
 				})
 			case 0x01:
@@ -309,7 +318,7 @@ func NewMux(conn io.ReadWriteCloser) *Mux {
 func NewMuxServer(conn io.ReadWriteCloser) *Mux {
 	mux := NewMux(conn)
 	for i := range Conf.StreamPool {
-		mux.usb[i] = NewWither(uint8(i), mux)
+		mux.usb[i] = NewWither(uint16(i), mux)
 	}
 	go mux.Recv()
 	return mux

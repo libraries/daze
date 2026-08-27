@@ -29,13 +29,13 @@ import (
 // identify the stream and the length of the message.
 //
 // +-----+-----+-----+-----+
-// | 0x0 | Sid |    Rsv    |
-// +-----+-----+-----+-----+-----+-----+
-// | 0x1 | Sid |    Len    |    Msg    |
-// +-----+-----+-----+-----+-----+-----+
-// | 0x2 | Sid | Ask | Rsv |
+// | 0x0 | Rsv |    Sid    |
+// +-----+-----+-----+-----+-----+-----+-----+-----+
+// | 0x1 | Rsv |    Sid    |    Len    |    Msg    |
+// +-----+-----+-----+-----+-----+-----+-----+-----+
+// | 0x2 | 0/1 |    Sid    |
 // +-----+-----+-----+-----+
-// | 0x3 | Ask |    Rsv    |
+// | 0x3 | 0/1 |    Rsv    |
 // +-----+-----+-----+-----+
 
 // Conf is acting as package level configuration.
@@ -46,9 +46,7 @@ var Conf = struct {
 	IdleProbeDuration time.Duration
 	// If no data is read for more than this time, the connection is closed.
 	IdleReplyDuration time.Duration
-	// Packet size. Since the size of the packet header is 4, this value must be greater than 4. If the value is too
-	// small, the transmission efficiency will be reduced, and if it is too large, the concurrency capability of mux
-	// will be reduced.
+	// Packet size. Since the size of the data packet header is 6, this value must be greater than 6.
 	PacketSize int
 	StreamPool int
 }{
