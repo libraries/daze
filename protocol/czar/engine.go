@@ -29,13 +29,13 @@ import (
 // identify the stream and the length of the message.
 //
 // +-----+-----+-----+-----+
-// | 0x0 | Sid |    Rsv    |
-// +-----+-----+-----+-----+-----+-----+
-// | 0x1 | Sid |    Len    |    Msg    |
-// +-----+-----+-----+-----+-----+-----+
-// | 0x2 | Sid | Ask | Rsv |
+// | 0x0 | Rsv |    Sid    |
+// +-----+-----+-----+-----+-----+-----+-----+-----+
+// | 0x1 | Rsv |    Sid    |    Len    |    Msg    |
+// +-----+-----+-----+-----+-----+-----+-----+-----+
+// | 0x2 | 0/1 |    Sid    |
 // +-----+-----+-----+-----+
-// | 0x3 | Ask |    Rsv    |
+// | 0x3 | 0/1 |    Rsv    |
 // +-----+-----+-----+-----+
 
 // Conf is acting as package level configuration.
@@ -46,17 +46,15 @@ var Conf = struct {
 	IdleProbeDuration time.Duration
 	// If no data is read for more than this time, the connection is closed.
 	IdleReplyDuration time.Duration
-	// Packet size. Since the size of the packet header is 4, this value must be greater than 4. If the value is too
-	// small, the transmission efficiency will be reduced, and if it is too large, the concurrency capability of mux
-	// will be reduced.
+	// Packet size. Since the size of the data packet header is 6, this value must be greater than 6.
 	PacketSize int
 	StreamPool int
 }{
 	FastWriteDuration: time.Second * 16,
 	IdleProbeDuration: time.Second * 32,
 	IdleReplyDuration: time.Second * 48,
-	PacketSize:        2048,
-	StreamPool:        256,
+	PacketSize:        1024 * 16,
+	StreamPool:        1024,
 }
 
 // Expv is a simple wrapper around the expvars package.
@@ -166,7 +164,7 @@ func (c *Client) Dial(ctx *daze.Context, network string, address string) (io.Rea
 		if err != nil {
 			return nil, err
 		}
-		log.Printf("czar: mux slot stream id=0x%02x", srv.idx)
+		log.Printf("czar: mux slot stream id=0x%04x", srv.idx)
 		spy := &ashe.Client{Cipher: c.Cipher}
 		con, err := spy.Estab(ctx, srv, network, address)
 		if err != nil {

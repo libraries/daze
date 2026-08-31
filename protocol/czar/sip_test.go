@@ -9,7 +9,7 @@ import (
 func TestProtocolCzarSip(t *testing.T) {
 	sid := NewSip()
 	for i := range Conf.StreamPool {
-		doa.Doa(doa.Try(sid.Get()) == uint8(i))
+		doa.Doa(doa.Try(sid.Get()) == uint16(i))
 	}
 	doa.Doa(doa.Err(sid.Get()) != nil)
 	sid.Put(65)

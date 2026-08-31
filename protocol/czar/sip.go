@@ -16,7 +16,7 @@ type Sip struct {
 }
 
 // Get selects an stream id from the pool, removes it from the pool, and returns it to the caller.
-func (s *Sip) Get() (uint8, error) {
+func (s *Sip) Get() (uint16, error) {
 	s.m.Lock()
 	defer s.m.Unlock()
 	n := big.NewInt(0).Not(s.i)
@@ -25,11 +25,11 @@ func (s *Sip) Get() (uint8, error) {
 		return 0, errors.New("daze: out of stream")
 	}
 	s.i.SetBit(s.i, m, 1)
-	return uint8(m), nil
+	return uint16(m), nil
 }
 
 // Put adds x to the pool.
-func (s *Sip) Put(x uint8) {
+func (s *Sip) Put(x uint16) {
 	s.m.Lock()
 	defer s.m.Unlock()
 	doa.Doa(s.i.Bit(int(x)) == 1)
@@ -37,7 +37,7 @@ func (s *Sip) Put(x uint8) {
 }
 
 // Set removes x from the pool.
-func (s *Sip) Set(x uint8) {
+func (s *Sip) Set(x uint16) {
 	s.m.Lock()
 	defer s.m.Unlock()
 	doa.Doa(s.i.Bit(int(x)) == 0)
