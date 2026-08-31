@@ -246,9 +246,9 @@ func (m *Mux) Recv() {
 			break
 		}
 		cmd = buf[0]
-		idx = binary.BigEndian.Uint16(buf[2:4])
 		switch cmd {
 		case 0x00:
+			idx = binary.BigEndian.Uint16(buf[2:4]) % uint16(len(m.usb))
 			// Make sure the stream has been closed properly.
 			old = m.usb[idx]
 			if old.rer.Get() == nil || old.wer.Get() == nil {
@@ -260,6 +260,7 @@ func (m *Mux) Recv() {
 			m.usb[idx] = stm
 			m.ach <- stm
 		case 0x01:
+			idx = binary.BigEndian.Uint16(buf[2:4]) % uint16(len(m.usb))
 			_, err = io.ReadFull(m.con, buf[:2])
 			if err != nil {
 				m.con.Close()
@@ -281,12 +282,13 @@ func (m *Mux) Recv() {
 			case <-stm.rer.Sig():
 			}
 		case 0x02:
+			idx = binary.BigEndian.Uint16(buf[2:4]) % uint16(len(m.usb))
 			stm = m.usb[idx]
 			stm.Esolc()
 			old = NewWither(idx, m)
 			m.usb[idx] = old
 		case 0x03:
-			switch idx {
+			switch buf[1] {
 			case 0x00:
 				m.pri.Pri(0, func() error {
 					mph := make([]byte, 4)

@@ -53,7 +53,7 @@ var Conf = struct {
 	FastWriteDuration: time.Second * 16,
 	IdleProbeDuration: time.Second * 32,
 	IdleReplyDuration: time.Second * 48,
-	PacketSize:        1024 * 4,
+	PacketSize:        1024 * 16,
 	StreamPool:        1024,
 }
 
