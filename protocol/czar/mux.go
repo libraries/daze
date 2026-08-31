@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"encoding/binary"
 	"io"
+	"math/rand/v2"
 	"sync"
 	"time"
 
@@ -112,7 +113,7 @@ func (s *Stream) Write(p []byte) (int, error) {
 			return n, nil
 		}
 		buf[0] = 0x01
-		buf[1] = 0x00
+		buf[1] = byte(rand.Uint())
 		binary.BigEndian.PutUint16(buf[2:4], s.idx)
 		binary.BigEndian.PutUint16(buf[4:6], uint16(l))
 		copy(buf[6:], p[:l])
@@ -197,7 +198,7 @@ func (m *Mux) Open() (*Stream, error) {
 	err = m.pri.Pri(0, func() error {
 		mph := make([]byte, 4)
 		mph[0] = 0x00
-		mph[1] = 0x00
+		mph[1] = byte(rand.Uint())
 		binary.BigEndian.PutUint16(mph[2:4], idx)
 		return doa.Err(m.con.Write(mph))
 	})
@@ -225,6 +226,7 @@ func (m *Mux) Recv() {
 				mph := make([]byte, 4)
 				mph[0] = 0x03
 				mph[1] = 0x00
+				binary.BigEndian.PutUint16(mph[2:4], uint16(rand.Uint()))
 				return doa.Err(m.con.Write(mph))
 			}) != nil {
 				m.Close()
@@ -290,8 +292,7 @@ func (m *Mux) Recv() {
 					mph := make([]byte, 4)
 					mph[0] = 0x03
 					mph[1] = 0x01
-					mph[2] = 0x00
-					mph[3] = 0x00
+					binary.BigEndian.PutUint16(mph[2:4], uint16(rand.Uint()))
 					return doa.Err(m.con.Write(mph))
 				})
 			case 0x01:

@@ -53,8 +53,8 @@ var Conf = struct {
 	FastWriteDuration: time.Second * 16,
 	IdleProbeDuration: time.Second * 32,
 	IdleReplyDuration: time.Second * 48,
-	PacketSize:        2048,
-	StreamPool:        256,
+	PacketSize:        1024 * 4,
+	StreamPool:        1024,
 }
 
 // Expv is a simple wrapper around the expvars package.
@@ -164,7 +164,7 @@ func (c *Client) Dial(ctx *daze.Context, network string, address string) (io.Rea
 		if err != nil {
 			return nil, err
 		}
-		log.Printf("czar: mux slot stream id=0x%02x", srv.idx)
+		log.Printf("czar: mux slot stream id=0x%04x", srv.idx)
 		spy := &ashe.Client{Cipher: c.Cipher}
 		con, err := spy.Estab(ctx, srv, network, address)
 		if err != nil {
