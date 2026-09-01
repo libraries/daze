@@ -148,7 +148,7 @@ func (s *Server) Hello(cli io.ReadWriteCloser) (io.ReadWriteCloser, error) {
 	gap = time.Now().Unix() - int64(binary.BigEndian.Uint64(buf))
 	sig = gap >> 63
 	if gap^sig-sig > int64(Conf.LifeExpired) {
-		return nil, errors.New("daze: request expired")
+		return nil, daze.ErrorUnauthorized
 	}
 	Expv.ServerClockSkew.Append(float64(gap))
 	return con, nil
@@ -193,6 +193,9 @@ func (s *Server) Serve(ctx *daze.Context, cli io.ReadWriteCloser) error {
 	if err != nil {
 		con.Write([]byte{1})
 		return err
+	}
+	if srv == nil {
+		return daze.ErrorNotImplemented
 	}
 	con.Write([]byte{0})
 	switch dstNet {
@@ -336,9 +339,9 @@ func (c *Client) Estab(ctx *daze.Context, srv io.ReadWriteCloser, network string
 	switch {
 	case buf[0] == 0:
 	case buf[0] == 1:
-		return nil, errors.New("daze: general server failure")
+		return nil, daze.ErrorUnprocessableEntity
 	case buf[0] >= 2:
-		return nil, errors.New("daze: receive error response")
+		return nil, daze.ErrorNotImplemented
 	}
 	switch network {
 	case "tcp":
