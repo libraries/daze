@@ -1,10 +1,10 @@
 package czar
 
 import (
-	"errors"
 	"math/big"
 	"sync"
 
+	"github.com/libraries/daze"
 	"github.com/libraries/daze/lib/doa"
 )
 
@@ -22,7 +22,7 @@ func (s *Sip) Get() (uint16, error) {
 	n := big.NewInt(0).Not(s.i)
 	m := int(n.TrailingZeroBits())
 	if m == Conf.StreamPool {
-		return 0, errors.New("daze: out of stream")
+		return 0, daze.ErrorTooManyRequests
 	}
 	s.i.SetBit(s.i, m, 1)
 	return uint16(m), nil
