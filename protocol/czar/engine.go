@@ -150,7 +150,8 @@ type Client struct {
 	Server string
 }
 
-// Close the connection. All streams will be closed at the same time.
+// Close the connection. All streams will be closed at the same time. It is not safe to call concurrently or multiple
+// times because it's not idempotent.
 func (c *Client) Close() error {
 	close(c.Cancel)
 	return nil
