@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/libraries/daze"
-	"github.com/libraries/daze/lib/doa"
 	"github.com/libraries/daze/lib/expvpp"
 	"github.com/libraries/daze/lib/rate"
 )
@@ -84,13 +83,17 @@ func NewUDPConn(c io.ReadWriteCloser) *UDPConn {
 
 // Read reads up to len(p) bytes into p.
 func (c *UDPConn) Read(p []byte) (int, error) {
-	doa.Doa(len(p) >= 2)
+	if len(p) < 2 {
+		return 0, io.ErrShortBuffer
+	}
 	_, err := io.ReadFull(c.ReadWriteCloser, p[:2])
 	if err != nil {
 		return 0, err
 	}
 	n := int(binary.BigEndian.Uint16(p[:2]))
-	doa.Doa(len(p) >= n)
+	if len(p) < n {
+		return 0, io.ErrShortBuffer
+	}
 	return io.ReadFull(c.ReadWriteCloser, p[:n])
 }
 
@@ -98,7 +101,9 @@ func (c *UDPConn) Read(p []byte) (int, error) {
 func (c *UDPConn) Write(p []byte) (int, error) {
 	// Maximum udp payload size is 65527(equal to 65535 - 8) bytes in theoretically. The 8 in the formula means the udp
 	// header, which contains source port, destination port, length and checksum.
-	doa.Doa(len(p) <= 65527)
+	if len(p) > 65527 {
+		return 0, daze.ErrContentTooLarge
+	}
 	b := make([]byte, 2+len(p))
 	binary.BigEndian.PutUint16(b, uint16(len(p)))
 	copy(b[2:], p)
@@ -156,7 +161,7 @@ func (s *Server) Hello(cli io.ReadWriteCloser) (io.ReadWriteCloser, error) {
 	gap = time.Now().Unix() - int64(binary.BigEndian.Uint64(buf))
 	sig = gap >> 63
 	if gap^sig-sig > int64(Conf.LifeExpired) {
-		return nil, daze.ErrorUnauthorized
+		return nil, daze.ErrUnauthorized
 	}
 	Expv.ServerClockSkew.Append(float64(gap))
 	return con, nil
@@ -203,7 +208,7 @@ func (s *Server) Serve(ctx *daze.Context, cli io.ReadWriteCloser) error {
 		return err
 	}
 	if srv == nil {
-		return daze.ErrorNotImplemented
+		return daze.ErrNotImplemented
 	}
 	con.Write([]byte{0})
 	switch dstNet {
@@ -347,9 +352,9 @@ func (c *Client) Estab(ctx *daze.Context, srv io.ReadWriteCloser, network string
 	switch {
 	case buf[0] == 0:
 	case buf[0] == 1:
-		return nil, daze.ErrorUnprocessableEntity
+		return nil, daze.ErrUnprocessableEntity
 	case buf[0] >= 2:
-		return nil, daze.ErrorNotImplemented
+		return nil, daze.ErrNotImplemented
 	}
 	switch network {
 	case "tcp":
