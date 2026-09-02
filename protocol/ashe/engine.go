@@ -25,10 +25,10 @@ import (
 // +------+------+-----+---------+---------+
 // | Salt | Time | Net | Dst.Len | Dst     |
 // +------+------+-----+---------+---------+
-// | 128  | 8    | 1   | 1       | 0 - 255 |
+// | 32   | 8    | 1   | 1       | 0 - 255 |
 // +------+------+-----+---------+---------+
 //
-// - Salt    : Random 128 bytes for rc4 key, all data will be transmitted encrypted after there
+// - Salt    : Random 32 bytes for rc4 key, all data will be transmitted encrypted after there
 // - Time    : Timestamp of request. The server will reject requests with past or future timestamps to prevent replay
 //             attacks
 // - Net     : 0x01 : TCP
