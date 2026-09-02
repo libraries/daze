@@ -667,10 +667,11 @@ func NewLocale(listen string, dialer Dialer) *Locale {
 }
 
 var (
-	ErrorNotImplemented      = errors.New("daze: not implemented")
-	ErrorTooManyRequests     = errors.New("daze: too many requests")
-	ErrorUnauthorized        = errors.New("daze: unauthorized")
-	ErrorUnprocessableEntity = errors.New("daze: unprocessable entity")
+	ErrContentTooLarge     = errors.New("daze: content too large")
+	ErrNotImplemented      = errors.New("daze: not implemented")
+	ErrTooManyRequests     = errors.New("daze: too many requests")
+	ErrUnauthorized        = errors.New("daze: unauthorized")
+	ErrUnprocessableEntity = errors.New("daze: unprocessable entity")
 )
 
 // ============================================================================

@@ -22,7 +22,7 @@ func (s *Sip) Get() (uint16, error) {
 	n := big.NewInt(0).Not(s.i)
 	m := int(n.TrailingZeroBits())
 	if m == Conf.StreamPool {
-		return 0, daze.ErrorTooManyRequests
+		return 0, daze.ErrTooManyRequests
 	}
 	s.i.SetBit(s.i, m, 1)
 	return uint16(m), nil
