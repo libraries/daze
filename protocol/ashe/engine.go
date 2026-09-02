@@ -126,8 +126,16 @@ func (s *Server) Hello(cli io.ReadWriteCloser) (io.ReadWriteCloser, error) {
 		con io.ReadWriteCloser
 		err error
 		gap int64
+		hst *time.Timer
 		sig int64
 	)
+	// If the handshake completes just as the timeout occurs, the callback may still execute cli.Close() concurrently,
+	// causing the newly established connection to be closed accidentally. Whether it's fixed or not, it won't have a
+	// significant impact on the program, so let's leave it as is.
+	hst = time.AfterFunc(daze.Conf.DialerTimeout, func() {
+		cli.Close()
+	})
+	defer hst.Stop()
 	buf = make([]byte, 32)
 	_, err = io.ReadFull(cli, buf)
 	if err != nil {
