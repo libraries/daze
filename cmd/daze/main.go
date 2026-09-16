@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"net/http"
@@ -17,7 +16,6 @@ import (
 	"github.com/libraries/daze/lib/doa"
 	"github.com/libraries/daze/lib/expvpp"
 	"github.com/libraries/daze/lib/gracefulexit"
-	"github.com/libraries/daze/lib/pretty"
 	"github.com/libraries/daze/lib/rate"
 	"github.com/libraries/daze/protocol/ashe"
 	"github.com/libraries/daze/protocol/baboon"
@@ -43,7 +41,6 @@ The most commonly used daze commands are:
   server     Start daze server
   client     Start daze client
   cidr       Generate or update rule.cidr
-  fast       Run daze protocol speed test
 
 Run 'daze <command> -h' for more information on a command.`
 
@@ -251,95 +248,6 @@ func main() {
 			fmt.Fprintln(f, "L", e.String())
 		}
 		log.Println("main: save apnic data done")
-	case "fast":
-		dazeClientListenOn := "127.0.0.1:28080"
-		dazeServerListenOn := "127.0.0.1:28081"
-		dazeTesterListenOn := "127.0.0.1:28082"
-		bodyLength := 256 * 1024 * 1024
-
-		dazeTester := daze.NewTester()
-		doa.Nil(dazeTester.ListenTCP(dazeTesterListenOn))
-		defer dazeTester.Close()
-
-		dspdFunc := func(cli io.ReadWriteCloser) uint64 {
-			tic := time.Now()
-			dazeTester.StreamRead2(cli, bodyLength)
-			ela := time.Since(tic)
-			spd := float64(bodyLength) / ela.Seconds()
-			return uint64(spd)
-		}
-		uspdFunc := func(cli io.ReadWriteCloser) uint64 {
-			tic := time.Now()
-			dazeTester.StreamWrite(cli, bodyLength)
-			dazeTester.StreamRead2(cli, 1)
-			ela := time.Since(tic)
-			spd := float64(bodyLength) / ela.Seconds()
-			return uint64(spd)
-		}
-
-		table := pretty.NewTable()
-		table.Conf = []string{"<", ">", ">"}
-		table.Head = []string{"protocol", "download", "upload"}
-		func() {
-			dazeServer := ashe.NewServer(dazeServerListenOn, "")
-			defer dazeServer.Close()
-			doa.Nil(dazeServer.Run())
-			dazeClient := ashe.NewClient(dazeServerListenOn, "")
-			cli := doa.Try(dazeClient.Dial(&daze.Context{}, "tcp", dazeTesterListenOn))
-			defer cli.Close()
-			dspd := daze.SizeShower(dspdFunc(cli)) + "/s"
-			uspd := daze.SizeShower(uspdFunc(cli)) + "/s"
-			table.Body = append(table.Body, []string{"ashe", dspd, uspd})
-		}()
-		func() {
-			dazeServer := baboon.NewServer(dazeServerListenOn, "")
-			defer dazeServer.Close()
-			doa.Nil(dazeServer.Run())
-			dazeClient := baboon.NewClient(dazeServerListenOn, "")
-			cli := doa.Try(dazeClient.Dial(&daze.Context{}, "tcp", dazeTesterListenOn))
-			defer cli.Close()
-			dspd := daze.SizeShower(dspdFunc(cli)) + "/s"
-			uspd := daze.SizeShower(uspdFunc(cli)) + "/s"
-			table.Body = append(table.Body, []string{"baboon", dspd, uspd})
-		}()
-		func() {
-			dazeServer := czar.NewServer(dazeServerListenOn, "")
-			defer dazeServer.Close()
-			doa.Nil(dazeServer.Run())
-			dazeClient := czar.NewClient(dazeServerListenOn, "")
-			defer dazeClient.Close()
-			cli := doa.Try(dazeClient.Dial(&daze.Context{}, "tcp", dazeTesterListenOn))
-			defer cli.Close()
-			dspd := daze.SizeShower(dspdFunc(cli)) + "/s"
-			uspd := daze.SizeShower(uspdFunc(cli)) + "/s"
-			table.Body = append(table.Body, []string{"czar", dspd, uspd})
-		}()
-		func() {
-			dazeServer := dahlia.NewServer(dazeServerListenOn, dazeTesterListenOn, "")
-			defer dazeServer.Close()
-			doa.Nil(dazeServer.Run())
-			dazeClient := dahlia.NewClient(dazeClientListenOn, dazeServerListenOn, "")
-			defer dazeClient.Close()
-			doa.Nil(dazeClient.Run())
-			cli := doa.Try(daze.Dial("tcp", dazeClientListenOn))
-			defer cli.Close()
-			dspd := daze.SizeShower(dspdFunc(cli)) + "/s"
-			uspd := daze.SizeShower(uspdFunc(cli)) + "/s"
-			table.Body = append(table.Body, []string{"dahlia", dspd, uspd})
-		}()
-		func() {
-			dazeServer := etch.NewServer(dazeServerListenOn, "")
-			defer dazeServer.Close()
-			doa.Nil(dazeServer.Run())
-			dazeClient := etch.NewClient(dazeServerListenOn, "")
-			defer dazeClient.Close()
-			cli := doa.Try(dazeClient.Dial(&daze.Context{}, "tcp", dazeTesterListenOn))
-			defer cli.Close()
-			dspd := daze.SizeShower(dspdFunc(cli)) + "/s"
-			uspd := daze.SizeShower(uspdFunc(cli)) + "/s"
-			table.Body = append(table.Body, []string{"etch", dspd, uspd})
-		}()
-		table.Print()
 	case "-h", "--help":
 		fmt.Println(helpMain)
 	case "-v", "--version":
