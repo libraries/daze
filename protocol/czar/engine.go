@@ -179,8 +179,8 @@ func (c *Client) Dial(ctx *daze.Context, network string, address string) (io.Rea
 	}
 }
 
-// Run creates an establish connection to czar server.
-func (c *Client) Run() {
+// Link creates an establish connection to czar server.
+func (c *Client) Link() {
 	const (
 		clientStatusClosed int = iota
 		clientStatusDialFailure
@@ -243,6 +243,11 @@ func (c *Client) Run() {
 	}
 }
 
+// Run starts the Link routine to establish a connection to the czar server.
+func (c *Client) Run() {
+	go c.Link()
+}
+
 // NewClient returns a new Client. Cipher is a password in string form, with no length limit.
 func NewClient(server, cipher string) *Client {
 	client := &Client{
@@ -252,6 +257,6 @@ func NewClient(server, cipher string) *Client {
 		Mux:    make(chan *Mux),
 		Server: server,
 	}
-	go client.Run()
+	client.Run()
 	return client
 }
