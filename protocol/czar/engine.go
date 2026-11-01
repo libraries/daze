@@ -47,12 +47,15 @@ var Conf = struct {
 	IdleProbeDuration time.Duration
 	// If no data is read for more than this time, the connection is closed.
 	IdleReplyDuration time.Duration
+	// The maximum number of concurrent connections allowed.
+	MaxConnect int
 	// Packet size. Since the size of the data packet header is 6, this value must be greater than 6.
 	PacketSize int
 }{
 	FastWriteDuration: time.Second * 16,
 	IdleProbeDuration: time.Second * 32,
 	IdleReplyDuration: time.Second * 48,
+	MaxConnect:        2,
 	PacketSize:        1024 * 16,
 }
 
@@ -164,7 +167,6 @@ func (c *Client) Dial(ctx *daze.Context, network string, address string) (io.Rea
 		if err != nil {
 			return nil, err
 		}
-		log.Printf("czar: mux slot stream id=0x%04x", srv.idx)
 		spy := &ashe.Client{Cipher: c.Cipher}
 		con, err := spy.Estab(ctx, srv, network, address)
 		if err != nil {
@@ -214,7 +216,6 @@ func (c *Client) Link() {
 				sid = clientStatusCancel
 			}
 		case clientStatusDialSuccess:
-			log.Println("czar: mux init")
 			rtc = &daze.ReadWriteCloser{
 				Reader: io.TeeReader(srv, rate.NewLimitsWriter(c.Limits)),
 				Writer: io.MultiWriter(srv, rate.NewLimitsWriter(c.Limits)),
@@ -227,11 +228,9 @@ func (c *Client) Link() {
 			select {
 			case c.Mux <- mux:
 			case <-mux.rer.Sig():
-				log.Println("czar: mux done")
 				mux.Close()
 				sid = clientStatusClosed
 			case <-c.Cancel:
-				log.Println("czar: mux done")
 				mux.Close()
 				sid = clientStatusCancel
 			}
@@ -243,7 +242,9 @@ func (c *Client) Link() {
 
 // Run starts the Link routine to establish a connection to the czar server.
 func (c *Client) Run() {
-	go c.Link()
+	for range Conf.MaxConnect {
+		go c.Link()
+	}
 }
 
 // NewClient returns a new Client. Cipher is a password in string form, with no length limit.
