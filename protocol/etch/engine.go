@@ -24,6 +24,14 @@ import (
 	"golang.org/x/net/quic"
 )
 
+// Conf is acting as package level configuration.
+var Conf = struct {
+	// The maximum number of concurrent connections allowed.
+	MaxConnect int
+}{
+	MaxConnect: 2,
+}
+
 var (
 	ServerConfig = once.NewOnceNew(func() *quic.Config {
 		key := doa.Try(ecdsa.GenerateKey(elliptic.P256(), rand.Reader))
@@ -212,8 +220,8 @@ func (c *Client) Dial(ctx *daze.Context, network string, address string) (io.Rea
 	}
 }
 
-// Run creates and maintains an established connection to the etch server.
-func (c *Client) Run() {
+// Link creates and maintains an established connection to the etch server.
+func (c *Client) Link() {
 	const (
 		clientStatusClosed int = iota
 		clientStatusDialFailure
@@ -250,7 +258,6 @@ func (c *Client) Run() {
 				sid = clientStatusCancel
 			}
 		case clientStatusDialSuccess:
-			log.Println("etch: quic init")
 			rtt = 0
 			go func(mux *quic.Conn) {
 				don <- mux.Wait(context.Background())
@@ -260,11 +267,9 @@ func (c *Client) Run() {
 			select {
 			case c.Mux <- mux:
 			case err = <-don:
-				log.Println("etch: quic done", err)
 				mux.Close()
 				sid = clientStatusClosed
 			case <-c.Cancel:
-				log.Println("etch: quic done")
 				mux.Close()
 				sid = clientStatusCancel
 			}
@@ -272,6 +277,13 @@ func (c *Client) Run() {
 			c.EpQuic.Close(context.Background())
 			return
 		}
+	}
+}
+
+// Run starts the Link routine to establish a connection to the etch server.
+func (c *Client) Run() {
+	for range Conf.MaxConnect {
+		go c.Link()
 	}
 }
 
@@ -285,6 +297,6 @@ func NewClient(server string, cipher string) *Client {
 		Mux:    make(chan *quic.Conn),
 		Server: server,
 	}
-	go client.Run()
+	client.Run()
 	return client
 }
