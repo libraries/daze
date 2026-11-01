@@ -58,7 +58,7 @@ func (s *Stream) Esolc() error {
 		})
 	})
 	s.zo1.Do(func() {
-		s.mux.usb[s.idx] = NewWither(s.idx, s.mux)
+		s.mux.usb.Del(s.idx)
 		s.mux.idp.Put(s.idx)
 	})
 	return nil
@@ -164,6 +164,37 @@ func NewWither(idx uint16, mux *Mux) *Stream {
 	return stm
 }
 
+// Banker stores streams by ID and is safe for concurrent use.
+type Banker struct {
+	usb map[uint16]*Stream
+}
+
+// Get returns the stream for idx, or a closed placeholder if idx is not stored.
+func (b *Banker) Get(idx uint16) *Stream {
+	stm, ok := b.usb[idx]
+	if !ok {
+		return NewWither(idx, nil)
+	}
+	return stm
+}
+
+// Set stores stm under idx.
+func (b *Banker) Set(idx uint16, stm *Stream) {
+	b.usb[idx] = stm
+}
+
+// Del removes the stream for idx from the store.
+func (b *Banker) Del(idx uint16) {
+	delete(b.usb, idx)
+}
+
+// NewBanker returns an empty, concurrency-safe stream store.
+func NewBanker() *Banker {
+	return &Banker{
+		usb: map[uint16]*Stream{},
+	}
+}
+
 // Mux is used to wrap a reliable ordered connection and to multiplex it into multiple streams.
 type Mux struct {
 	ach chan *Stream
@@ -171,7 +202,7 @@ type Mux struct {
 	idp *Sip
 	pri *priority.Priority
 	rer *once.OnceErr
-	usb []*Stream
+	usb *Banker
 }
 
 // Accept is used to block until the next available stream is ready to be accepted.
@@ -208,7 +239,7 @@ func (m *Mux) Open() (*Stream, error) {
 		return nil, err
 	}
 	stm = NewStream(idx, m)
-	m.usb[idx] = stm
+	m.usb.Set(idx, stm)
 	return stm, nil
 }
 
@@ -249,19 +280,19 @@ func (m *Mux) Recv() {
 		cmd = buf[0]
 		switch cmd {
 		case 0x00:
-			idx = binary.BigEndian.Uint16(buf[2:4]) % uint16(len(m.usb))
+			idx = binary.BigEndian.Uint16(buf[2:4])
 			// Make sure the stream has been closed properly.
-			old = m.usb[idx]
+			old = m.usb.Get(idx)
 			if old.rer.Get() == nil || old.wer.Get() == nil {
 				m.con.Close()
 				break
 			}
 			stm = NewStream(idx, m)
 			m.idp.Del(idx)
-			m.usb[idx] = stm
+			m.usb.Set(idx, stm)
 			m.ach <- stm
 		case 0x01:
-			idx = binary.BigEndian.Uint16(buf[2:4]) % uint16(len(m.usb))
+			idx = binary.BigEndian.Uint16(buf[2:4])
 			_, err = io.ReadFull(m.con, buf[:2])
 			if err != nil {
 				m.con.Close()
@@ -274,7 +305,7 @@ func (m *Mux) Recv() {
 				m.con.Close()
 				break
 			}
-			stm = m.usb[idx]
+			stm = m.usb.Get(idx)
 			if stm.rer.Get() != nil {
 				break
 			}
@@ -283,8 +314,8 @@ func (m *Mux) Recv() {
 			case <-stm.rer.Sig():
 			}
 		case 0x02:
-			idx = binary.BigEndian.Uint16(buf[2:4]) % uint16(len(m.usb))
-			stm = m.usb[idx]
+			idx = binary.BigEndian.Uint16(buf[2:4])
+			stm = m.usb.Get(idx)
 			stm.Esolc()
 		case 0x03:
 			switch buf[1] {
@@ -311,7 +342,7 @@ func NewMux(conn io.ReadWriteCloser) *Mux {
 		idp: NewSip(),
 		pri: priority.NewPriority(3),
 		rer: once.NewOnceErr(),
-		usb: make([]*Stream, Conf.StreamPool),
+		usb: NewBanker(),
 	}
 	return mux
 }
@@ -319,9 +350,6 @@ func NewMux(conn io.ReadWriteCloser) *Mux {
 // NewMuxServer returns a new MuxServer.
 func NewMuxServer(conn io.ReadWriteCloser) *Mux {
 	mux := NewMux(conn)
-	for i := range Conf.StreamPool {
-		mux.usb[i] = NewWither(uint16(i), mux)
-	}
 	go mux.Recv()
 	return mux
 }

@@ -1,6 +1,7 @@
 package czar
 
 import (
+	"math"
 	"math/big"
 	"math/bits"
 	"sync"
@@ -21,8 +22,7 @@ type Sip struct {
 }
 
 // Del marks ID x as in use, preventing Get from returning it.
-// It panics if x is already in use. The caller must ensure that
-// x is less than Conf.StreamPool; Del does not check this limit.
+// It panics if x is already in use.
 func (s *Sip) Del(x uint16) {
 	s.m.Lock()
 	defer s.m.Unlock()
@@ -31,7 +31,7 @@ func (s *Sip) Del(x uint16) {
 }
 
 // Get marks the smallest available stream ID as in use and returns it.
-// IDs start at 0 and must be less than Conf.StreamPool.
+// IDs start at 0 and cover the full uint16 range.
 // If all IDs are in use, Get returns daze.ErrTooManyRequests without
 // changing the bitmap; the returned ID must be ignored on error.
 func (s *Sip) Get() (uint16, error) {
@@ -39,7 +39,7 @@ func (s *Sip) Get() (uint16, error) {
 	defer s.m.Unlock()
 	n := big.NewInt(0).Not(s.i)
 	m := int(n.TrailingZeroBits())
-	if m == Conf.StreamPool {
+	if m > math.MaxUint16 {
 		return 0, daze.ErrTooManyRequests
 	}
 	s.i.SetBit(s.i, m, 1)

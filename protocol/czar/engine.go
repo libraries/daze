@@ -49,13 +49,11 @@ var Conf = struct {
 	IdleReplyDuration time.Duration
 	// Packet size. Since the size of the data packet header is 6, this value must be greater than 6.
 	PacketSize int
-	StreamPool int
 }{
 	FastWriteDuration: time.Second * 16,
 	IdleProbeDuration: time.Second * 32,
 	IdleReplyDuration: time.Second * 48,
 	PacketSize:        1024 * 16,
-	StreamPool:        1024,
 }
 
 // Expv is a simple wrapper around the expvars package.
