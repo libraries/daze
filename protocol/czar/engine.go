@@ -165,6 +165,10 @@ func (c *Client) Dial(ctx *daze.Context, network string, address string) (io.Rea
 	case mux := <-c.Mux:
 		srv, err := mux.Open()
 		if err != nil {
+			// Close the mux if the error is not due to too many requests.
+			if !errors.Is(err, daze.ErrTooManyRequests) {
+				mux.Close()
+			}
 			return nil, err
 		}
 		spy := &ashe.Client{Cipher: c.Cipher}
