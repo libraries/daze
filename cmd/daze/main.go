@@ -9,6 +9,7 @@ import (
 	"net/http/pprof"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -99,10 +100,11 @@ func main() {
 			defer server.Close()
 			doa.Nil(server.Run())
 		case "baboon":
-			server := baboon.NewServer(*flListen, *flCipher)
-			if *flExtend != "" {
-				server.Masker = *flExtend
+			if e, ok := daze.ExternScan(*flExtend)["masker"]; ok {
+				log.Printf("main: extern config masker=%s", e)
+				baboon.Conf.Masker = e
 			}
+			server := baboon.NewServer(*flListen, *flCipher)
 			if *flLimits != "" {
 				server.Limits = rate.NewLimits(daze.SizeParser(*flLimits), time.Second)
 			}
@@ -143,6 +145,7 @@ func main() {
 			flCidrls = flag.String("c", filepath.Join(resExec, Conf.PathCIDR), "cidr path")
 			flCipher = flag.String("k", "daze", "password, should be same with the one specified by server")
 			flDnserv = flag.String("dns", "", "specifies the DNS, DoT or DoH server")
+			flExtend = flag.String("e", "", "extend data for different protocols")
 			flFilter = flag.String("f", "rule", "filter {rule, remote, locale}")
 			flGpprof = flag.String("g", "", "specify an address to enable net/http/pprof")
 			flLimits = flag.String("b", "", "set the maximum bandwidth in bytes per second, for example, 128k or 1.5m")
@@ -188,6 +191,10 @@ func main() {
 			defer locale.Close()
 			doa.Nil(locale.Run())
 		case "czar":
+			if e, ok := daze.ExternScan(*flExtend)["maxconnect"]; ok {
+				log.Printf("main: extern config maxconnect=%s", e)
+				czar.Conf.MaxConnect = doa.Try(strconv.Atoi(e))
+			}
 			client := czar.NewClient(*flServer, *flCipher)
 			if *flLimits != "" {
 				client.Limits = rate.NewLimits(daze.SizeParser(*flLimits), time.Second)
@@ -208,6 +215,10 @@ func main() {
 			defer client.Close()
 			doa.Nil(client.Run())
 		case "etch":
+			if e, ok := daze.ExternScan(*flExtend)["maxconnect"]; ok {
+				log.Printf("main: extern config maxconnect=%s", e)
+				etch.Conf.MaxConnect = doa.Try(strconv.Atoi(e))
+			}
 			client := etch.NewClient(*flServer, *flCipher)
 			if *flLimits != "" {
 				client.Limits = rate.NewLimits(daze.SizeParser(*flLimits), time.Second)

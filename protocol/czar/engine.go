@@ -55,7 +55,7 @@ var Conf = struct {
 	FastWriteDuration: time.Second * 16,
 	IdleProbeDuration: time.Second * 32,
 	IdleReplyDuration: time.Second * 48,
-	MaxConnect:        2,
+	MaxConnect:        1,
 	PacketSize:        1024 * 16,
 }
 

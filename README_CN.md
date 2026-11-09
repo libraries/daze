@@ -87,7 +87,7 @@ Daze 默认使用的协议叫作 Ashe. Ashe 是一种基于 TCP 的加密代理�
 Baboon 协议是 Ashe 协议的一个运行在 HTTP 之上的变体. 在该协议中, Daze 服务端会伪装成一个 HTTP 服务, 用户必须提供正确的密码才能访问代理服务. 如果没有提供密码, Daze 服务端的行为就会像普通的 HTTP 服务一样. 要使用 Baboon 协议, 必须指定协议名称和一个伪装网站:
 
 ```sh
-$ daze server ... -p baboon -e https://github.com
+$ daze server ... -p baboon -e masker=https://github.com
 $ daze client ... -p baboon
 ```
 

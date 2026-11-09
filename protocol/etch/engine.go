@@ -29,7 +29,7 @@ var Conf = struct {
 	// The maximum number of concurrent connections allowed.
 	MaxConnect int
 }{
-	MaxConnect: 2,
+	MaxConnect: 1,
 }
 
 var (

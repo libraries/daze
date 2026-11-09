@@ -1060,6 +1060,19 @@ func Dial(network string, address string) (net.Conn, error) {
 	return d.Dial(network, address)
 }
 
+// ExternScan parses a semicolon-separated list of key=value pairs into a map.
+func ExternScan(extern string) map[string]string {
+	conf := map[string]string{}
+	for s := range strings.SplitSeq(extern, ";") {
+		e := strings.SplitN(s, "=", 2)
+		if len(e) != 2 {
+			continue
+		}
+		conf[e[0]] = e[1]
+	}
+	return conf
+}
+
 // GravityReader wraps an io.Reader with RC4 crypto.
 func GravityReader(r io.Reader, k []byte) io.Reader {
 	cr := doa.Try(rc4.NewCipher(k))

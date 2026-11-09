@@ -87,7 +87,7 @@ Please note that it is the user's responsibility to ensure that the date and tim
 Protocol baboon is a variant of the ashe protocol that operates over HTTP. In this protocol, the daze server masquerades as an HTTP service and requires the user to provide the correct password in order to gain access to the proxy service. If the password is not provided, the daze server will behave as a normal HTTP service. To use the baboon protocol, you must specify the protocol name and a fake site:
 
 ```sh
-$ daze server ... -p baboon -e https://github.com
+$ daze server ... -p baboon -e masker=https://github.com
 $ daze client ... -p baboon
 ```
 
