@@ -8,7 +8,7 @@ Daze 是一款帮助你穿越防火墙的软件, 换句话说, 它是一个代�
 
 ## 简介
 
-Daze 被设计为一个单文件应用. 首先, 编译或[下载](https://github.com/libraries/daze) Daze:
+Daze 被设计为一个单文件应用. 首先, 编译或[下载](https://github.com/libraries/daze/releases) Daze:
 
 ```sh
 $ git clone https://github.com/libraries/daze
@@ -91,6 +91,10 @@ $ daze server ... -p baboon -e masker=https://github.com
 $ daze client ... -p baboon
 ```
 
+可以通过 `-e` 选项指定扩展数据:
+
+- `masker`: 指定伪装成 HTTP 服务时使用的伪装网站.
+
 **Czar**
 
 Czar 协议是基于 TCP 多路复用的 Ashe 协议实现. 多路复用会让多个 Ashe 协议复用同一个 TCP 连接, 从而节省 TCP 三次握手所需的时间. 不过, 这可能会导致数据传输速率略有下降(约 0.19%). 大多数情况下, 相比直接使用 Ashe 协议, 使用 Czar 协议可以提供更好的用户体验.
@@ -99,6 +103,10 @@ Czar 协议是基于 TCP 多路复用的 Ashe 协议实现. 多路复用会让�
 $ daze server ... -p czar
 $ daze client ... -p czar
 ```
+
+可以通过 `-e` 选项指定扩展数据:
+
+- `open_connection`: 指定 Czar 协议允许的最大并发连接数. 默认为 1.
 
 **Dahlia**
 
@@ -120,6 +128,10 @@ Etch 协议是通过 QUIC 传输的 Ashe 协议. QUIC 是一种基于 UDP, 支�
 $ daze server ... -p etch
 $ daze client ... -p etch
 ```
+
+可以通过 `-e` 选项指定扩展数据:
+
+- `open_connection`: 指定 Etch 协议允许的最大并发连接数. 默认为 1.
 
 ## 配置: 代理控制
 

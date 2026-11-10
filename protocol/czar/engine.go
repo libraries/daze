@@ -48,14 +48,14 @@ var Conf = struct {
 	// If no data is read for more than this time, the connection is closed.
 	IdleReplyDuration time.Duration
 	// The maximum number of concurrent connections allowed.
-	MaxConnect int
+	OpenConnection int
 	// Packet size. Since the size of the data packet header is 6, this value must be greater than 6.
 	PacketSize int
 }{
 	FastWriteDuration: time.Second * 16,
 	IdleProbeDuration: time.Second * 32,
 	IdleReplyDuration: time.Second * 48,
-	MaxConnect:        1,
+	OpenConnection:    1,
 	PacketSize:        1024 * 16,
 }
 
@@ -246,7 +246,7 @@ func (c *Client) Link() {
 
 // Run starts the Link routine to establish a connection to the czar server.
 func (c *Client) Run() {
-	for range Conf.MaxConnect {
+	for range Conf.OpenConnection {
 		go c.Link()
 	}
 }

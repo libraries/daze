@@ -27,9 +27,9 @@ import (
 // Conf is acting as package level configuration.
 var Conf = struct {
 	// The maximum number of concurrent connections allowed.
-	MaxConnect int
+	OpenConnection int
 }{
-	MaxConnect: 1,
+	OpenConnection: 1,
 }
 
 var (
@@ -282,7 +282,7 @@ func (c *Client) Link() {
 
 // Run starts the Link routine to establish a connection to the etch server.
 func (c *Client) Run() {
-	for range Conf.MaxConnect {
+	for range Conf.OpenConnection {
 		go c.Link()
 	}
 }

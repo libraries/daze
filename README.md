@@ -91,6 +91,10 @@ $ daze server ... -p baboon -e masker=https://github.com
 $ daze client ... -p baboon
 ```
 
+Extend data can be specified using the `-e` option:
+
+- `masker`: Specifies the fake site to masquerade as an HTTP service.
+
 **Czar**
 
 Protocol czar is an implementation of the ashe protocol based on TCP multiplexing. Multiplexing involves reusing a single TCP connection for multiple ashe protocols, which saves time on the TCP three-way handshake. However, this may result in a slight decrease in data transfer rate (approximately 0.19%). In most cases, using Protocol czar provides a better user experience compared to using the ashe protocol directly.
@@ -99,6 +103,10 @@ Protocol czar is an implementation of the ashe protocol based on TCP multiplexin
 $ daze server ... -p czar
 $ daze client ... -p czar
 ```
+
+Extend data can be specified using the `-e` option:
+
+- `open_connection`: Specifies the maximum number of concurrent connections allowed for the czar protocol. Default is 1.
 
 **Dahlia**
 
@@ -121,6 +129,10 @@ Protocol etch is the ashe protocol carried over QUIC. QUIC is a UDP-based, multi
 $ daze server ... -p etch
 $ daze client ... -p etch
 ```
+
+Extend data can be specified using the `-e` option:
+
+- `open_connection`: Specifies the maximum number of concurrent connections allowed for the etch protocol. Default is 1.
 
 ## Configuration: Proxy Control
 

@@ -75,7 +75,7 @@ func main() {
 		var (
 			flCipher = flag.String("k", "daze", "password, should be same with the one specified by client")
 			flDnserv = flag.String("dns", "", "specifies the DNS, DoT or DoH server")
-			flExtend = flag.String("e", "", "extend data for different protocols")
+			flExtend = flag.String("e", "", "extend data for different protocols. Use k0=v0;k1=v1 format")
 			flGpprof = flag.String("g", "", "specify an address to enable net/http/pprof")
 			flLimits = flag.String("b", "", "set the maximum bandwidth in bytes per second, for example, 128k or 1.5m")
 			flListen = flag.String("l", "0.0.0.0:1081", "listen address")
@@ -145,7 +145,7 @@ func main() {
 			flCidrls = flag.String("c", filepath.Join(resExec, Conf.PathCIDR), "cidr path")
 			flCipher = flag.String("k", "daze", "password, should be same with the one specified by server")
 			flDnserv = flag.String("dns", "", "specifies the DNS, DoT or DoH server")
-			flExtend = flag.String("e", "", "extend data for different protocols")
+			flExtend = flag.String("e", "", "extend data for different protocols. Use k0=v0;k1=v1 format")
 			flFilter = flag.String("f", "rule", "filter {rule, remote, locale}")
 			flGpprof = flag.String("g", "", "specify an address to enable net/http/pprof")
 			flLimits = flag.String("b", "", "set the maximum bandwidth in bytes per second, for example, 128k or 1.5m")
@@ -191,9 +191,9 @@ func main() {
 			defer locale.Close()
 			doa.Nil(locale.Run())
 		case "czar":
-			if e, ok := daze.ExternScan(*flExtend)["maxconnect"]; ok {
-				log.Printf("main: extern config maxconnect=%s", e)
-				czar.Conf.MaxConnect = doa.Try(strconv.Atoi(e))
+			if e, ok := daze.ExternScan(*flExtend)["open_connection"]; ok {
+				log.Printf("main: extern config open_connection=%s", e)
+				czar.Conf.OpenConnection = doa.Try(strconv.Atoi(e))
 			}
 			client := czar.NewClient(*flServer, *flCipher)
 			if *flLimits != "" {
@@ -215,9 +215,9 @@ func main() {
 			defer client.Close()
 			doa.Nil(client.Run())
 		case "etch":
-			if e, ok := daze.ExternScan(*flExtend)["maxconnect"]; ok {
-				log.Printf("main: extern config maxconnect=%s", e)
-				etch.Conf.MaxConnect = doa.Try(strconv.Atoi(e))
+			if e, ok := daze.ExternScan(*flExtend)["open_connection"]; ok {
+				log.Printf("main: extern config open_connection=%s", e)
+				etch.Conf.OpenConnection = doa.Try(strconv.Atoi(e))
 			}
 			client := etch.NewClient(*flServer, *flCipher)
 			if *flLimits != "" {
