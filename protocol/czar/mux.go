@@ -166,33 +166,31 @@ func NewWither(idx uint16, mux *Mux) *Stream {
 
 // Banker stores streams by ID and is safe for concurrent use.
 type Banker struct {
-	usb map[uint16]*Stream
+	usb sync.Map
 }
 
 // Get returns the stream for idx, or a closed placeholder if idx is not stored.
 func (b *Banker) Get(idx uint16) *Stream {
-	stm, ok := b.usb[idx]
+	stm, ok := b.usb.Load(idx)
 	if !ok {
 		return NewWither(idx, nil)
 	}
-	return stm
+	return stm.(*Stream)
 }
 
 // Set stores stm under idx.
 func (b *Banker) Set(idx uint16, stm *Stream) {
-	b.usb[idx] = stm
+	b.usb.Store(idx, stm)
 }
 
 // Del removes the stream for idx from the store.
 func (b *Banker) Del(idx uint16) {
-	delete(b.usb, idx)
+	b.usb.Delete(idx)
 }
 
 // NewBanker returns an empty, concurrency-safe stream store.
 func NewBanker() *Banker {
-	return &Banker{
-		usb: map[uint16]*Stream{},
-	}
+	return &Banker{}
 }
 
 // Mux is used to wrap a reliable ordered connection and to multiplex it into multiple streams.
