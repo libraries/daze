@@ -239,6 +239,7 @@ func (c *Client) Link() {
 	for {
 		switch sid {
 		case clientStatusClosed:
+			log.Println("etch: mux init")
 			cty, end := context.WithTimeout(context.Background(), daze.Conf.DialerTimeout)
 			mux, err = c.EpQuic.Dial(cty, "udp", c.Server, ClientConfig.Do())
 			end()
@@ -248,7 +249,7 @@ func (c *Client) Link() {
 				sid = clientStatusDialSuccess
 			}
 		case clientStatusDialFailure:
-			log.Println("etch:", err)
+			log.Println("etch: mux fail", err)
 			select {
 			case <-time.After(time.Second * time.Duration(math.Pow(2, float64(rtt)))):
 				// A slow start reconnection algorithm.
@@ -258,6 +259,7 @@ func (c *Client) Link() {
 				sid = clientStatusCancel
 			}
 		case clientStatusDialSuccess:
+			log.Println("etch: mux open")
 			rtt = 0
 			go func(mux *quic.Conn) {
 				don <- mux.Wait(context.Background())
@@ -267,9 +269,11 @@ func (c *Client) Link() {
 			select {
 			case c.Mux <- mux:
 			case err = <-don:
+				log.Println("etch: mux done")
 				mux.Close()
 				sid = clientStatusClosed
 			case <-c.Cancel:
+				log.Println("etch: mux done")
 				mux.Close()
 				sid = clientStatusCancel
 			}

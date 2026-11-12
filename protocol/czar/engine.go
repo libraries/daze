@@ -203,6 +203,7 @@ func (c *Client) Link() {
 	for {
 		switch sid {
 		case clientStatusClosed:
+			log.Println("czar: mux init")
 			srv, err = daze.Dial("tcp", c.Server)
 			if err != nil {
 				sid = clientStatusDialFailure
@@ -210,7 +211,7 @@ func (c *Client) Link() {
 				sid = clientStatusDialSuccess
 			}
 		case clientStatusDialFailure:
-			log.Println("czar:", err)
+			log.Println("czar: mux fail", err)
 			select {
 			case <-time.After(time.Second * time.Duration(math.Pow(2, float64(rtt)))):
 				// A slow start reconnection algorithm.
@@ -220,6 +221,7 @@ func (c *Client) Link() {
 				sid = clientStatusCancel
 			}
 		case clientStatusDialSuccess:
+			log.Println("czar: mux open")
 			rtc = &daze.ReadWriteCloser{
 				Reader: io.TeeReader(srv, rate.NewLimitsWriter(c.Limits)),
 				Writer: io.MultiWriter(srv, rate.NewLimitsWriter(c.Limits)),
@@ -232,9 +234,11 @@ func (c *Client) Link() {
 			select {
 			case c.Mux <- mux:
 			case <-mux.rer.Sig():
+				log.Println("czar: mux done")
 				mux.Close()
 				sid = clientStatusClosed
 			case <-c.Cancel:
+				log.Println("czar: mux done")
 				mux.Close()
 				sid = clientStatusCancel
 			}
