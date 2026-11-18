@@ -1196,8 +1196,16 @@ func SizeShower(s uint64) string {
 func LoadApnic() map[string][]*net.IPNet {
 	url := "http://ftp.apnic.net/apnic/stats/apnic/delegated-apnic-latest"
 	log.Println("main: load apnic data from", url)
-	rep := doa.Try(http.Get(url))
+	req := doa.Try(http.NewRequest("GET", url, nil))
+	// On November 18, 2026, I discovered that the default http client could no longer access this url, so made this
+	// change.
+	req.Header.Set("User-Agent", "curl/8.18.0")
+	rep := doa.Try(http.DefaultClient.Do(req))
 	defer rep.Body.Close()
+	if rep.StatusCode != http.StatusOK {
+		log.Println("main: load apnic data fail", strings.TrimSpace(string(doa.Try(io.ReadAll(rep.Body)))))
+		log.Panicln()
+	}
 	f := io.TeeReader(rep.Body, pretty.NewProgressWriter(uint64(rep.ContentLength)))
 	r := map[string][]*net.IPNet{}
 	s := bufio.NewScanner(f)
